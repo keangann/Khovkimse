@@ -9,8 +9,24 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-    <!-- TODO: Add other Firebase SDKs as needed (auth, etc.) -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script>
+    // Firebase placeholder config (replace with your actual values later)
+    const firebaseConfig = {
+        apiKey: "placeholder-api-key",
+        authDomain: "placeholder.firebaseapp.com", 
+        projectId: "placeholder-project-id",
+        storageBucket: "placeholder.appspot.com",
+        messagingSenderId: "123456789",
+        appId: "placeholder-app-id"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    // Enable offline persistence
+    db.enablePersistence().catch(function(err) {
+        console.error("Firestore persistence error:", err);
+    });
+    </script>
     <style>
         .fade-in { animation: fadeIn 0.3s ease-in; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -1167,42 +1183,232 @@
         let allowedRadius = 100; // meters
 
         // Notification System
-        // ...existing code...
-        // Firebase configuration (replace with your own project credentials)
-        const firebaseConfig = {
-            apiKey: "YOUR_API_KEY",
-            authDomain: "YOUR_AUTH_DOMAIN",
-            databaseURL: "YOUR_DATABASE_URL",
-            projectId: "YOUR_PROJECT_ID",
-            storageBucket: "YOUR_STORAGE_BUCKET",
-            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-            appId: "YOUR_APP_ID"
-        };
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.database();
-        // ...existing code...
-            
-            // Check employee accounts using Firebase
-            db.ref('employees').orderByChild('username').equalTo(username).once('value', function(snapshot) {
-                let found = null;
-                snapshot.forEach(function(childSnapshot) {
-                    const emp = childSnapshot.val();
-                    if (emp.password === password) {
-                        found = emp;
-                    }
-                });
-                if (found) {
-                    currentUser = found;
-                    isAdmin = false;
-                    saveSession();
-                    showSuccess('Login');
-                    setTimeout(() => {
-                        showEmployeeDashboard();
-                    }, 1000);
-                } else {
-                    showError('Login', 'Please check your username and password.');
-                }
+        function showNotification(message, type = 'info', duration = 4000) {
+            // Remove any existing notifications
+            const existingNotifications = document.querySelectorAll('.notification');
+            existingNotifications.forEach(notification => {
+                notification.remove();
             });
+
+            // Create notification element
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 18px;">
+                        ${type === 'success' ? '✅' : type === 'error' ? '❌' : type === 'warning' ? '⚠️' : 'ℹ️'}
+                    </span>
+                    <span>${message}</span>
+                </div>
+            `;
+
+            // Add to document
+            document.body.appendChild(notification);
+
+            // Show notification with animation
+            setTimeout(() => {
+                notification.classList.add('show');
+            }, 100);
+
+            // Auto-hide notification
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.remove();
+                    }
+                }, 300);
+            }, duration);
+        }
+
+        function showSuccess(action) {
+            showNotification(`Success: ${action} completed successfully.`, 'success');
+        }
+
+        function showError(action, details = '') {
+            const message = details ? `Error: ${action} failed. ${details}` : `Error: ${action} failed. Please try again.`;
+            showNotification(message, 'error');
+        }
+
+        function showWarning(message) {
+            showNotification(`Warning: ${message}`, 'warning');
+        }
+
+        function showInfo(message) {
+            showNotification(message, 'info');
+        }
+
+        // Initialize the application
+        function initApp() {
+            loadStoredData();
+            checkExistingSession();
+            setupDefaultAccounts();
+            
+            // Start automatic absent status generation
+            initializeAbsentStatusGeneration();
+        }
+
+        // Load data from localStorage
+        function loadStoredData() {
+            // Firestore: Load attendance records
+            db.collection('attendanceData').onSnapshot(snapshot => {
+                attendanceData = [];
+                snapshot.forEach(doc => attendanceData.push(doc.data()));
+                cleanOldData();
+            }, error => {
+                showError('Sync error', 'Failed to sync attendance records.');
+                console.error('Attendance sync error:', error);
+            });
+
+            // Firestore: Load employees
+            db.collection('employees').onSnapshot(snapshot => {
+                employees = [];
+                snapshot.forEach(doc => employees.push(doc.data()));
+            }, error => {
+                showError('Sync error', 'Failed to sync employees.');
+                console.error('Employees sync error:', error);
+            });
+
+            // Firestore: Load admins
+            db.collection('admins').onSnapshot(snapshot => {
+                admins = [];
+                snapshot.forEach(doc => admins.push(doc.data()));
+            }, error => {
+                showError('Sync error', 'Failed to sync admins.');
+                console.error('Admins sync error:', error);
+            });
+
+            // Firestore: Load shifts
+            db.collection('shifts').onSnapshot(snapshot => {
+                shifts = [];
+                snapshot.forEach(doc => shifts.push(doc.data()));
+            }, error => {
+                showError('Sync error', 'Failed to sync shifts.');
+                console.error('Shifts sync error:', error);
+            });
+
+            // Firestore: Load QR code text
+            db.collection('settings').doc('qrCodeRequiredText').onSnapshot(doc => {
+                if (doc.exists) {
+                    qrCodeRequiredText = doc.data().value;
+                    document.getElementById('qrCodeText').value = qrCodeRequiredText;
+                }
+            }, error => {
+                showError('Sync error', 'Failed to sync QR code text.');
+                console.error('QR code text sync error:', error);
+            });
+
+            // Firestore: Load scanning location
+            db.collection('settings').doc('scanningLocation').onSnapshot(doc => {
+                if (doc.exists) {
+                    scanningLocation = doc.data().value;
+                    updateLocationDisplay();
+                }
+            }, error => {
+                showError('Sync error', 'Failed to sync scanning location.');
+                console.error('Scanning location sync error:', error);
+            });
+        }
+
+        // Setup default accounts
+        function setupDefaultAccounts() {
+            // Default employee account
+            if (!employees.find(emp => emp.username === 'keangann')) {
+                employees.push({
+                    id: 'emp_' + Date.now(),
+                    username: 'keangann',
+                    password: 'password123'
+                });
+            }
+
+            // Default admin account (cannot be removed)
+            if (!admins.find(admin => admin.username === 'ann')) {
+                admins.push({
+                    id: 'admin_' + Date.now(),
+                    username: 'ann',
+                    password: 'password123',
+                    permanent: true
+                });
+            }
+
+            saveData();
+        }
+
+        // Check for existing session
+        function checkExistingSession() {
+            // Firestore: Load session
+            if (currentUser && currentUser.username) {
+                db.collection('sessions').doc(currentUser.username).get()
+                .then(doc => {
+                    if (doc.exists) {
+                        const sessionData = doc.data();
+                        // Validate session data
+                        if (!sessionData.user || typeof sessionData.isAdmin !== 'boolean') {
+                            throw new Error('Invalid session data');
+                        }
+                        // Verify user still exists in the system
+                        const userExists = sessionData.isAdmin ? 
+                            admins.find(admin => admin.username === sessionData.user.username) :
+                            employees.find(emp => emp.username === sessionData.user.username);
+                        if (!userExists) {
+                            throw new Error('User no longer exists');
+                        }
+                        currentUser = sessionData.user;
+                        isAdmin = sessionData.isAdmin;
+                        // Redirect to appropriate dashboard based on role
+                        if (isAdmin) {
+                            showAdminDashboard();
+                        } else {
+                            showEmployeeDashboard();
+                        }
+                    } else {
+                        showEmployeeLogin();
+                    }
+                })
+                .catch(error => {
+                    console.error('Session load error:', error);
+                    showEmployeeLogin();
+                });
+            }
+        }
+
+        // Clean old data based on rules
+        function cleanOldData() {
+            const now = new Date();
+            const twoYearsAgo = new Date(now.getFullYear() - 2, now.getMonth(), now.getDate());
+            
+            // For admin: remove data older than 2 years
+            attendanceData = attendanceData.filter(record => {
+                const recordDate = new Date(record.date);
+                return recordDate >= twoYearsAgo;
+            });
+
+            // For employee view: remove data from previous months (handled in updateMonthlyStatus)
+        }
+
+        // Login functionality
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            // Check employee accounts only
+            const employee = employees.find(e => e.username === username && e.password === password);
+            if (employee) {
+                currentUser = employee;
+                isAdmin = false;
+                saveSession();
+                showSuccess('Login');
+                setTimeout(() => {
+                    showEmployeeDashboard();
+                }, 1000);
+                return;
+            }
+            
+            // Invalid credentials
+            showError('Login', 'Please check your username and password.');
+        });
 
         // Admin login functionality
         document.getElementById('adminLoginForm').addEventListener('submit', function(e) {
@@ -1211,27 +1417,22 @@
             const username = document.getElementById('adminUsername').value;
             const password = document.getElementById('adminPassword').value;
             
-            // Check admin accounts using Firebase
-            db.ref('admins').orderByChild('username').equalTo(username).once('value', function(snapshot) {
-                let found = null;
-                snapshot.forEach(function(childSnapshot) {
-                    const adm = childSnapshot.val();
-                    if (adm.password === password) {
-                        found = adm;
-                    }
-                });
-                if (found) {
-                    currentUser = found;
-                    isAdmin = true;
-                    saveSession();
-                    showSuccess('Admin login');
-                    setTimeout(() => {
-                        showAdminDashboard();
-                    }, 1000);
-                } else {
-                    showError('Admin login', 'Please check your username and password.');
-                }
-            });
+            // Check admin accounts only
+            const admin = admins.find(a => a.username === username && a.password === password);
+            if (admin) {
+                currentUser = admin;
+                isAdmin = true;
+                saveSession();
+                showSuccess('Admin login');
+                setTimeout(() => {
+                    showAdminDashboard();
+                }, 1000);
+                return;
+            }
+            
+            // Invalid credentials
+            showError('Admin login', 'Please check your username and password.');
+        });
 
         // Save user session
         function saveSession() {
@@ -1239,7 +1440,7 @@
                 user: currentUser,
                 isAdmin: isAdmin
             };
-            localStorage.setItem('userSession', JSON.stringify(sessionData));
+            db.collection('sessions').doc(sessionData.user.username).set(sessionData);
         }
 
 
@@ -1673,23 +1874,13 @@
                 
                 console.log(`Creating new scan in record:`, newRecord);
                 attendanceData.push(newRecord);
-                // Save to Firebase
-                db.ref('attendanceData').set(attendanceData, function(error) {
-                    if (error) {
-                        showError('Attendance', 'Failed to save attendance data.');
-                    } else {
-                        showSuccess(`Scan in recorded successfully for ${activeShift.name} - Status: ${status}`);
-                    }
-                });
+                showSuccess(`Scan in recorded successfully for ${activeShift.name} - Status: ${status}`);
             }
-            // Save scan out changes to Firebase as well
-            db.ref('attendanceData').set(attendanceData, function(error) {
-                if (error) {
-                    showError('Attendance', 'Failed to save attendance data.');
-                }
-            });
+            
+            saveData();
             updateMonthlyStatus();
             updateScanButtonState();
+            
             console.log(`=== ATTENDANCE RECORDING COMPLETE ===`);
         }
 
@@ -2921,14 +3112,17 @@
                 }
                 
                 qrCodeRequiredText = newText;
-                localStorage.setItem('qrCodeRequiredText', qrCodeRequiredText);
-                
+                db.collection('settings').doc('qrCodeRequiredText').set({ value: qrCodeRequiredText });
                 showSuccess('QR Code text updated');
             });
         }
 
         function logout() {
-            localStorage.removeItem('userSession');
+            if (currentUser && currentUser.username) {
+                db.collection('sessions').doc(currentUser.username).delete().catch(error => {
+                    console.error('Session delete error:', error);
+                });
+            }
             const userName = currentUser ? currentUser.username : 'User';
             currentUser = null;
             isAdmin = false;
@@ -3021,12 +3215,25 @@
         }
 
         function saveData() {
-            localStorage.setItem('attendanceData', JSON.stringify(attendanceData));
-            localStorage.setItem('employees', JSON.stringify(employees));
-            localStorage.setItem('admins', JSON.stringify(admins));
-            localStorage.setItem('shifts', JSON.stringify(shifts));
+            // Firestore: Save attendance records
+            attendanceData.forEach(record => {
+                db.collection('attendanceData').doc(record.id).set(record);
+            });
+            // Firestore: Save employees
+            employees.forEach(emp => {
+                db.collection('employees').doc(emp.id).set(emp);
+            });
+            // Firestore: Save admins
+            admins.forEach(admin => {
+                db.collection('admins').doc(admin.id).set(admin);
+            });
+            // Firestore: Save shifts
+            shifts.forEach(shift => {
+                db.collection('shifts').doc(shift.id).set(shift);
+            });
+            // Firestore: Save scanning location
             if (scanningLocation) {
-                localStorage.setItem('scanningLocation', JSON.stringify(scanningLocation));
+                db.collection('settings').doc('scanningLocation').set({ value: scanningLocation });
             }
         }
 
@@ -3256,9 +3463,13 @@
         function clearScanningLocation() {
             if (confirm('Are you sure you want to clear the scanning location? This will allow employees to scan from anywhere.')) {
                 scanningLocation = null;
-                localStorage.removeItem('scanningLocation');
-                updateLocationDisplay();
-                showSuccess('Scanning location cleared - employees can now scan from anywhere');
+                db.collection('settings').doc('scanningLocation').delete().then(() => {
+                    updateLocationDisplay();
+                    showSuccess('Scanning location cleared - employees can now scan from anywhere');
+                }).catch(error => {
+                    showError('Clear location', 'Failed to clear scanning location.');
+                    console.error('Scanning location delete error:', error);
+                });
             }
         }
 
