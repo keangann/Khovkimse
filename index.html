@@ -1,25 +1,3 @@
-<div id="simpleLogin" style="background: white; padding: 20px; border-bottom: 1px solid #ccc;">
-    <h3>Sync Across Devices</h3>
-    <input type="text" id="syncUsername" placeholder="Choose a username">
-    <button onclick="enableSync()">Enable Sync</button>
-    <p style="font-size: 12px; color: #666;">Use same username on all devices to see same data</p>
-</div>
-
-<script>
-function enableSync() {
-    const username = document.getElementById('syncUsername').value;
-    if (username) {
-        localStorage.setItem('syncUsername', username);
-        document.getElementById('simpleLogin').style.display = 'none';
-        alert('Sync enabled! Use "' + username + '" on other devices.');
-    }
-}
-
-// Check if sync is already enabled
-if (localStorage.getItem('syncUsername')) {
-    document.getElementById('simpleLogin').style.display = 'none';
-}
-</script>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -29,6 +7,10 @@ if (localStorage.getItem('syncUsername')) {
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <!-- TODO: Add other Firebase SDKs as needed (auth, etc.) -->
     <style>
         .fade-in { animation: fadeIn 0.3s ease-in; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -1185,207 +1167,42 @@ if (localStorage.getItem('syncUsername')) {
         let allowedRadius = 100; // meters
 
         // Notification System
-        function showNotification(message, type = 'info', duration = 4000) {
-            // Remove any existing notifications
-            const existingNotifications = document.querySelectorAll('.notification');
-            existingNotifications.forEach(notification => {
-                notification.remove();
-            });
-
-            // Create notification element
-            const notification = document.createElement('div');
-            notification.className = `notification ${type}`;
-            notification.innerHTML = `
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <span style="font-size: 18px;">
-                        ${type === 'success' ? '✅' : type === 'error' ? '❌' : type === 'warning' ? '⚠️' : 'ℹ️'}
-                    </span>
-                    <span>${message}</span>
-                </div>
-            `;
-
-            // Add to document
-            document.body.appendChild(notification);
-
-            // Show notification with animation
-            setTimeout(() => {
-                notification.classList.add('show');
-            }, 100);
-
-            // Auto-hide notification
-            setTimeout(() => {
-                notification.classList.remove('show');
-                setTimeout(() => {
-                    if (notification.parentNode) {
-                        notification.remove();
-                    }
-                }, 300);
-            }, duration);
-        }
-
-        function showSuccess(action) {
-            showNotification(`Success: ${action} completed successfully.`, 'success');
-        }
-
-        function showError(action, details = '') {
-            const message = details ? `Error: ${action} failed. ${details}` : `Error: ${action} failed. Please try again.`;
-            showNotification(message, 'error');
-        }
-
-        function showWarning(message) {
-            showNotification(`Warning: ${message}`, 'warning');
-        }
-
-        function showInfo(message) {
-            showNotification(message, 'info');
-        }
-
-        // Initialize the application
-        function initApp() {
-            loadStoredData();
-            checkExistingSession();
-            setupDefaultAccounts();
+        // ...existing code...
+        // Firebase configuration (replace with your own project credentials)
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_AUTH_DOMAIN",
+            databaseURL: "YOUR_DATABASE_URL",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_STORAGE_BUCKET",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        // ...existing code...
             
-            // Start automatic absent status generation
-            initializeAbsentStatusGeneration();
-        }
-
-        // Load data from localStorage
-        function loadStoredData() {
-            const storedAttendance = localStorage.getItem('attendanceData');
-            if (storedAttendance) {
-                attendanceData = JSON.parse(storedAttendance);
-                // Clean old attendance data (older than 2 years for admin, monthly for employees)
-                cleanOldData();
-            }
-
-            const storedEmployees = localStorage.getItem('employees');
-            if (storedEmployees) {
-                employees = JSON.parse(storedEmployees);
-            }
-
-            const storedAdmins = localStorage.getItem('admins');
-            if (storedAdmins) {
-                admins = JSON.parse(storedAdmins);
-            }
-
-            const storedShifts = localStorage.getItem('shifts');
-            if (storedShifts) {
-                shifts = JSON.parse(storedShifts);
-            }
-
-            const storedQRText = localStorage.getItem('qrCodeRequiredText');
-            if (storedQRText) {
-                qrCodeRequiredText = storedQRText;
-                document.getElementById('qrCodeText').value = qrCodeRequiredText;
-            }
-
-            const storedScanningLocation = localStorage.getItem('scanningLocation');
-            if (storedScanningLocation) {
-                scanningLocation = JSON.parse(storedScanningLocation);
-                updateLocationDisplay();
-            }
-        }
-
-        // Setup default accounts
-        function setupDefaultAccounts() {
-            // Default employee account
-            if (!employees.find(emp => emp.username === 'keangann')) {
-                employees.push({
-                    id: 'emp_' + Date.now(),
-                    username: 'keangann',
-                    password: 'password123'
-                });
-            }
-
-            // Default admin account (cannot be removed)
-            if (!admins.find(admin => admin.username === 'ann')) {
-                admins.push({
-                    id: 'admin_' + Date.now(),
-                    username: 'ann',
-                    password: 'password123',
-                    permanent: true
-                });
-            }
-
-            saveData();
-        }
-
-        // Check for existing session
-        function checkExistingSession() {
-            const session = localStorage.getItem('userSession');
-            if (session) {
-                try {
-                    const sessionData = JSON.parse(session);
-                    
-                    // Validate session data
-                    if (!sessionData.user || typeof sessionData.isAdmin !== 'boolean') {
-                        throw new Error('Invalid session data');
+            // Check employee accounts using Firebase
+            db.ref('employees').orderByChild('username').equalTo(username).once('value', function(snapshot) {
+                let found = null;
+                snapshot.forEach(function(childSnapshot) {
+                    const emp = childSnapshot.val();
+                    if (emp.password === password) {
+                        found = emp;
                     }
-                    
-                    // Verify user still exists in the system
-                    const userExists = sessionData.isAdmin ? 
-                        admins.find(admin => admin.username === sessionData.user.username) :
-                        employees.find(emp => emp.username === sessionData.user.username);
-                    
-                    if (!userExists) {
-                        throw new Error('User no longer exists');
-                    }
-                    
-                    currentUser = sessionData.user;
-                    isAdmin = sessionData.isAdmin;
-                    
-                    // Redirect to appropriate dashboard based on role
-                    if (isAdmin) {
-                        showAdminDashboard();
-                    } else {
+                });
+                if (found) {
+                    currentUser = found;
+                    isAdmin = false;
+                    saveSession();
+                    showSuccess('Login');
+                    setTimeout(() => {
                         showEmployeeDashboard();
-                    }
-                } catch (error) {
-                    // Invalid session - clear it and show login
-                    localStorage.removeItem('userSession');
-                    showEmployeeLogin();
+                    }, 1000);
+                } else {
+                    showError('Login', 'Please check your username and password.');
                 }
-            }
-        }
-
-        // Clean old data based on rules
-        function cleanOldData() {
-            const now = new Date();
-            const twoYearsAgo = new Date(now.getFullYear() - 2, now.getMonth(), now.getDate());
-            
-            // For admin: remove data older than 2 years
-            attendanceData = attendanceData.filter(record => {
-                const recordDate = new Date(record.date);
-                return recordDate >= twoYearsAgo;
             });
-
-            // For employee view: remove data from previous months (handled in updateMonthlyStatus)
-        }
-
-        // Login functionality
-        document.getElementById('loginForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
-            
-            // Check employee accounts only
-            const employee = employees.find(e => e.username === username && e.password === password);
-            if (employee) {
-                currentUser = employee;
-                isAdmin = false;
-                saveSession();
-                showSuccess('Login');
-                setTimeout(() => {
-                    showEmployeeDashboard();
-                }, 1000);
-                return;
-            }
-            
-            // Invalid credentials
-            showError('Login', 'Please check your username and password.');
-        });
 
         // Admin login functionality
         document.getElementById('adminLoginForm').addEventListener('submit', function(e) {
@@ -1394,22 +1211,27 @@ if (localStorage.getItem('syncUsername')) {
             const username = document.getElementById('adminUsername').value;
             const password = document.getElementById('adminPassword').value;
             
-            // Check admin accounts only
-            const admin = admins.find(a => a.username === username && a.password === password);
-            if (admin) {
-                currentUser = admin;
-                isAdmin = true;
-                saveSession();
-                showSuccess('Admin login');
-                setTimeout(() => {
-                    showAdminDashboard();
-                }, 1000);
-                return;
-            }
-            
-            // Invalid credentials
-            showError('Admin login', 'Please check your username and password.');
-        });
+            // Check admin accounts using Firebase
+            db.ref('admins').orderByChild('username').equalTo(username).once('value', function(snapshot) {
+                let found = null;
+                snapshot.forEach(function(childSnapshot) {
+                    const adm = childSnapshot.val();
+                    if (adm.password === password) {
+                        found = adm;
+                    }
+                });
+                if (found) {
+                    currentUser = found;
+                    isAdmin = true;
+                    saveSession();
+                    showSuccess('Admin login');
+                    setTimeout(() => {
+                        showAdminDashboard();
+                    }, 1000);
+                } else {
+                    showError('Admin login', 'Please check your username and password.');
+                }
+            });
 
         // Save user session
         function saveSession() {
@@ -1851,13 +1673,23 @@ if (localStorage.getItem('syncUsername')) {
                 
                 console.log(`Creating new scan in record:`, newRecord);
                 attendanceData.push(newRecord);
-                showSuccess(`Scan in recorded successfully for ${activeShift.name} - Status: ${status}`);
+                // Save to Firebase
+                db.ref('attendanceData').set(attendanceData, function(error) {
+                    if (error) {
+                        showError('Attendance', 'Failed to save attendance data.');
+                    } else {
+                        showSuccess(`Scan in recorded successfully for ${activeShift.name} - Status: ${status}`);
+                    }
+                });
             }
-            
-            saveData();
+            // Save scan out changes to Firebase as well
+            db.ref('attendanceData').set(attendanceData, function(error) {
+                if (error) {
+                    showError('Attendance', 'Failed to save attendance data.');
+                }
+            });
             updateMonthlyStatus();
             updateScanButtonState();
-            
             console.log(`=== ATTENDANCE RECORDING COMPLETE ===`);
         }
 
@@ -3722,4 +3554,3 @@ if (localStorage.getItem('syncUsername')) {
     </script>
 <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'984f536b01253dab',t:'MTc1ODg1MzY4NS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
-
