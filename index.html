@@ -3700,3 +3700,159 @@
     </script>
 <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'984f536b01253dab',t:'MTc1ODg1MzY4NS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
+<!-- Add these to your existing <head> section -->
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+// Firebase configuration
+const firebaseConfig = {
+    apiKey: "your-api-key-here",
+    authDomain: "your-project-id.firebaseapp.com",
+    projectId: "your-qr-attendance-system",
+    storageBucket: "your-project-id.appspot.com",
+    messagingSenderId: "123456789",
+    appId: "your-app-id-here"
+};
+
+// Initialize Firebase
+let db = null;
+let firebaseInitialized = false;
+
+// Initialize the application
+function initApp() {
+    initializeFirebase();
+    setupDefaultAccounts();
+}
+
+function initializeFirebase() {
+    try {
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        db = firebase.firestore();
+        firebaseInitialized = true;
+        console.log('✅ Firebase initialized successfully');
+        
+        // Load data from Firebase instead of localStorage
+        loadDataFromFirebase();
+    } catch (error) {
+        console.error('❌ Firebase initialization failed:', error);
+        showError('Database', 'Failed to connect to cloud storage. Using local storage instead.');
+        firebaseInitialized = false;
+        loadStoredData(); // Fallback to localStorage
+    }
+}
+// Save data to Firebase (and localStorage as backup)
+async function saveData() {
+    // Always save to localStorage as backup
+    localStorage.setItem('attendanceData', JSON.stringify(attendanceData));
+    localStorage.setItem('employees', JSON.stringify(employees));
+    localStorage.setItem('admins', JSON.stringify(admins));
+    localStorage.setItem('shifts', JSON.stringify(shifts));
+    if (scanningLocation) {
+        localStorage.setItem('scanningLocation', JSON.stringify(scanningLocation));
+    }
+
+    // Save to Firebase if available
+    if (!firebaseInitialized) return;
+
+    try {
+        // Save attendance records
+        const attendanceBatch = db.batch();
+        attendanceData.forEach(record => {
+            const docRef = db.collection('attendance').doc(record.id);
+            const { id, ...recordData } = record;
+            attendanceBatch.set(docRef, recordData);
+        });
+
+        // Save employees
+        const employeesBatch = db.batch();
+        employees.forEach(emp => {
+            const docRef = db.collection('employees').doc(emp.id);
+            const { id, ...empData } = emp;
+            employeesBatch.set(docRef, empData);
+        });
+
+        // Save admins
+        const adminsBatch = db.batch();
+        admins.forEach(admin => {
+            const docRef = db.collection('admins').doc(admin.id);
+            const { id, ...adminData } = admin;
+            adminsBatch.set(docRef, adminData);
+        });
+
+        // Save shifts
+        const shiftsBatch = db.batch();
+        Object.keys(shifts).forEach(employee => {
+            shifts[employee].forEach(shift => {
+                const docRef = db.collection('shifts').doc(shift.id);
+                const shiftData = {
+                    employee: employee,
+                    name: shift.name,
+                    startTime: shift.startTime,
+                    endTime: shift.endTime,
+                    workingDays: shift.workingDays
+                };
+                shiftsBatch.set(docRef, shiftData);
+            });
+        });
+
+        // Save settings
+        const settingsData = {
+            qrCodeText: qrCodeRequiredText,
+            scanningLocation: scanningLocation,
+            allowedRadius: allowedRadius,
+            lastUpdated: new Date().toISOString()
+        };
+        await db.collection('settings').doc('appSettings').set(settingsData);
+
+        // Commit all batches
+        await Promise.all([
+            attendanceBatch.commit(),
+            employeesBatch.commit(),
+            adminsBatch.commit(),
+            shiftsBatch.commit()
+        ]);
+
+        console.log('✅ Data saved to Firebase');
+
+    } catch (error) {
+        console.error('Error saving to Firebase:', error);
+        showError('Data save', 'Failed to save to cloud. Data saved locally only.');
+    }
+}
+// Fallback function to load from localStorage
+function loadStoredData() {
+    console.log('📥 Loading data from localStorage (fallback)...');
+    
+    const storedAttendance = localStorage.getItem('attendanceData');
+    if (storedAttendance) {
+        attendanceData = JSON.parse(storedAttendance);
+        cleanOldData();
+    }
+
+    const storedEmployees = localStorage.getItem('employees');
+    if (storedEmployees) {
+        employees = JSON.parse(storedEmployees);
+    }
+
+    const storedAdmins = localStorage.getItem('admins');
+    if (storedAdmins) {
+        admins = JSON.parse(storedAdmins);
+    }
+
+    const storedShifts = localStorage.getItem('shifts');
+    if (storedShifts) {
+        shifts = JSON.parse(storedShifts);
+    }
+
+    const storedQRText = localStorage.getItem('qrCodeRequiredText');
+    if (storedQRText) {
+        qrCodeRequiredText = storedQRText;
+    }
+
+    const storedScanningLocation = localStorage.getItem('scanningLocation');
+    if (storedScanningLocation) {
+        scanningLocation = JSON.parse(storedScanningLocation);
+    }
+
+    checkExistingSession();
+}
