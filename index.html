@@ -1,4 +1,139 @@
 <!DOCTYPE html>
+<html>
+<head>
+    <title>Your QR Code App</title>
+    <!-- Your existing head content -->
+</head>
+<body>
+    <!-- ADD THIS NEW LOGIN SECTION AT THE VERY TOP -->
+    <div id="loginSection">
+        <h3>Login to Sync Across Devices</h3>
+        <input type="text" id="username" placeholder="Username">
+        <input type="password" id="password" placeholder="Password">
+        <button onclick="login()">Login</button>
+        <p>Don't have an account? <a href="#" onclick="showRegister()">Register</a></p>
+    </div>
+
+    <div id="registerSection" style="display:none;">
+        <h3>Create Account</h3>
+        <input type="text" id="newUsername" placeholder="Username">
+        <input type="password" id="newPassword" placeholder="Password">
+        <input type="email" id="email" placeholder="Email">
+        <button onclick="register()">Register</button>
+        <p>Already have an account? <a href="#" onclick="showLogin()">Login</a></p>
+    </div>
+
+    <div id="mainContent" style="display:none;">
+        <!-- YOUR EXISTING QR CODE CONTENT GOES HERE - DON'T CHANGE ANYTHING -->
+        <div id="yourExistingContent">
+            <!-- All your current HTML stays exactly as it is -->
+        </div>
+    </div>
+
+    <script>
+        // ADD THIS NEW JAVASCRIPT CODE
+        let currentUser = null;
+
+        function showRegister() {
+            document.getElementById('loginSection').style.display = 'none';
+            document.getElementById('registerSection').style.display = 'block';
+        }
+
+        function showLogin() {
+            document.getElementById('registerSection').style.display = 'none';
+            document.getElementById('loginSection').style.display = 'block';
+        }
+
+        function register() {
+            const username = document.getElementById('newUsername').value;
+            const password = document.getElementById('newPassword').value;
+            const email = document.getElementById('email').value;
+            
+            if (!username || !password) {
+                alert('Please fill all fields');
+                return;
+            }
+            
+            const users = JSON.parse(localStorage.getItem('users') || '{}');
+            if (users[username]) {
+                alert('Username already exists');
+                return;
+            }
+            
+            users[username] = { password, email };
+            localStorage.setItem('users', JSON.stringify(users));
+            
+            alert('Registration successful! Please login.');
+            showLogin();
+        }
+
+        function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            const users = JSON.parse(localStorage.getItem('users') || '{}');
+            
+            if (users[username] && users[username].password === password) {
+                currentUser = username;
+                localStorage.setItem('currentUser', username);
+                
+                document.getElementById('loginSection').style.display = 'none';
+                document.getElementById('mainContent').style.display = 'block';
+                document.getElementById('yourExistingContent').style.display = 'block';
+                
+                // This will try to load existing data - it won't break anything
+                loadUserData();
+            } else {
+                alert('Invalid credentials');
+            }
+        }
+
+        function logout() {
+            currentUser = null;
+            localStorage.removeItem('currentUser');
+            document.getElementById('mainContent').style.display = 'none';
+            document.getElementById('loginSection').style.display = 'block';
+        }
+
+        function checkLogin() {
+            const savedUser = localStorage.getItem('currentUser');
+            if (savedUser) {
+                currentUser = savedUser;
+                document.getElementById('loginSection').style.display = 'none';
+                document.getElementById('mainContent').style.display = 'block';
+                document.getElementById('yourExistingContent').style.display = 'block';
+                loadUserData();
+            } else {
+                // If not logged in, still show your existing content
+                document.getElementById('loginSection').style.display = 'block';
+                document.getElementById('yourExistingContent').style.display = 'block';
+            }
+        }
+
+        function loadUserData() {
+            if (!currentUser) return;
+            // This function exists but won't break anything if your existing code doesn't use it
+        }
+
+        function saveUserData(data) {
+            if (!currentUser) return;
+            const userData = JSON.parse(localStorage.getItem('userData') || '{}');
+            userData[currentUser] = data;
+            localStorage.setItem('userData', JSON.stringify(userData));
+        }
+
+        // Initialize when page loads
+        checkLogin();
+    </script>
+
+    <!-- YOUR EXISTING JAVASCRIPT CODE STAYS EXACTLY AS IT IS -->
+    <script>
+        // All your current JavaScript code remains untouched
+        // Your QR code generation, etc. stays exactly the same
+    </script>
+</body>
+</html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -3700,159 +3835,3 @@
     </script>
 <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'984f536b01253dab',t:'MTc1ODg1MzY4NS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
-<!-- Add these to your existing <head> section -->
-<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-// Firebase configuration
-const firebaseConfig = {
-    apiKey: "your-api-key-here",
-    authDomain: "your-project-id.firebaseapp.com",
-    projectId: "your-qr-attendance-system",
-    storageBucket: "your-project-id.appspot.com",
-    messagingSenderId: "123456789",
-    appId: "your-app-id-here"
-};
-
-// Initialize Firebase
-let db = null;
-let firebaseInitialized = false;
-
-// Initialize the application
-function initApp() {
-    initializeFirebase();
-    setupDefaultAccounts();
-}
-
-function initializeFirebase() {
-    try {
-        // Initialize Firebase
-        firebase.initializeApp(firebaseConfig);
-        db = firebase.firestore();
-        firebaseInitialized = true;
-        console.log('✅ Firebase initialized successfully');
-        
-        // Load data from Firebase instead of localStorage
-        loadDataFromFirebase();
-    } catch (error) {
-        console.error('❌ Firebase initialization failed:', error);
-        showError('Database', 'Failed to connect to cloud storage. Using local storage instead.');
-        firebaseInitialized = false;
-        loadStoredData(); // Fallback to localStorage
-    }
-}
-// Save data to Firebase (and localStorage as backup)
-async function saveData() {
-    // Always save to localStorage as backup
-    localStorage.setItem('attendanceData', JSON.stringify(attendanceData));
-    localStorage.setItem('employees', JSON.stringify(employees));
-    localStorage.setItem('admins', JSON.stringify(admins));
-    localStorage.setItem('shifts', JSON.stringify(shifts));
-    if (scanningLocation) {
-        localStorage.setItem('scanningLocation', JSON.stringify(scanningLocation));
-    }
-
-    // Save to Firebase if available
-    if (!firebaseInitialized) return;
-
-    try {
-        // Save attendance records
-        const attendanceBatch = db.batch();
-        attendanceData.forEach(record => {
-            const docRef = db.collection('attendance').doc(record.id);
-            const { id, ...recordData } = record;
-            attendanceBatch.set(docRef, recordData);
-        });
-
-        // Save employees
-        const employeesBatch = db.batch();
-        employees.forEach(emp => {
-            const docRef = db.collection('employees').doc(emp.id);
-            const { id, ...empData } = emp;
-            employeesBatch.set(docRef, empData);
-        });
-
-        // Save admins
-        const adminsBatch = db.batch();
-        admins.forEach(admin => {
-            const docRef = db.collection('admins').doc(admin.id);
-            const { id, ...adminData } = admin;
-            adminsBatch.set(docRef, adminData);
-        });
-
-        // Save shifts
-        const shiftsBatch = db.batch();
-        Object.keys(shifts).forEach(employee => {
-            shifts[employee].forEach(shift => {
-                const docRef = db.collection('shifts').doc(shift.id);
-                const shiftData = {
-                    employee: employee,
-                    name: shift.name,
-                    startTime: shift.startTime,
-                    endTime: shift.endTime,
-                    workingDays: shift.workingDays
-                };
-                shiftsBatch.set(docRef, shiftData);
-            });
-        });
-
-        // Save settings
-        const settingsData = {
-            qrCodeText: qrCodeRequiredText,
-            scanningLocation: scanningLocation,
-            allowedRadius: allowedRadius,
-            lastUpdated: new Date().toISOString()
-        };
-        await db.collection('settings').doc('appSettings').set(settingsData);
-
-        // Commit all batches
-        await Promise.all([
-            attendanceBatch.commit(),
-            employeesBatch.commit(),
-            adminsBatch.commit(),
-            shiftsBatch.commit()
-        ]);
-
-        console.log('✅ Data saved to Firebase');
-
-    } catch (error) {
-        console.error('Error saving to Firebase:', error);
-        showError('Data save', 'Failed to save to cloud. Data saved locally only.');
-    }
-}
-// Fallback function to load from localStorage
-function loadStoredData() {
-    console.log('📥 Loading data from localStorage (fallback)...');
-    
-    const storedAttendance = localStorage.getItem('attendanceData');
-    if (storedAttendance) {
-        attendanceData = JSON.parse(storedAttendance);
-        cleanOldData();
-    }
-
-    const storedEmployees = localStorage.getItem('employees');
-    if (storedEmployees) {
-        employees = JSON.parse(storedEmployees);
-    }
-
-    const storedAdmins = localStorage.getItem('admins');
-    if (storedAdmins) {
-        admins = JSON.parse(storedAdmins);
-    }
-
-    const storedShifts = localStorage.getItem('shifts');
-    if (storedShifts) {
-        shifts = JSON.parse(storedShifts);
-    }
-
-    const storedQRText = localStorage.getItem('qrCodeRequiredText');
-    if (storedQRText) {
-        qrCodeRequiredText = storedQRText;
-    }
-
-    const storedScanningLocation = localStorage.getItem('scanningLocation');
-    if (storedScanningLocation) {
-        scanningLocation = JSON.parse(storedScanningLocation);
-    }
-
-    checkExistingSession();
-}
