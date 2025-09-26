@@ -1,0 +1,3702 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Code Attendance System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        .fade-in { animation: fadeIn 0.3s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .slide-up { animation: slideUp 0.3s ease-out; }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .scanner-container { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .status-card { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+        .admin-card { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+        
+        /* Notification System Styles */
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            max-width: 400px;
+            padding: 16px 20px;
+            border-radius: 8px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            font-weight: 500;
+            transform: translateX(100%);
+            transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out;
+        }
+        
+        .notification.show {
+            transform: translateX(0);
+        }
+        
+        .notification.success {
+            background-color: #10b981;
+            color: white;
+            border-left: 4px solid #059669;
+        }
+        
+        .notification.error {
+            background-color: #ef4444;
+            color: white;
+            border-left: 4px solid #dc2626;
+        }
+        
+        .notification.warning {
+            background-color: #f59e0b;
+            color: white;
+            border-left: 4px solid #d97706;
+        }
+        
+        .notification.info {
+            background-color: #3b82f6;
+            color: white;
+            border-left: 4px solid #2563eb;
+        }
+        
+        /* Admin Navigation Bar Styles */
+        .admin-nav-btn {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            font-size: 14px;
+            white-space: nowrap;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .admin-nav-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+        
+        .admin-nav-btn:active {
+            transform: translateY(0);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        
+        @media (max-width: 768px) {
+            .admin-nav-btn span:last-child {
+                display: none;
+            }
+            .admin-nav-btn {
+                padding: 12px;
+                min-width: 48px;
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+    <!-- Login Screen -->
+    <div id="loginScreen" class="min-h-screen flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md fade-in">
+            <div class="text-center mb-8">
+                <div class="bg-gradient-to-r from-blue-600 to-purple-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <span class="text-white text-2xl">📱</span>
+                </div>
+                <h1 class="text-3xl font-bold text-gray-800 mb-2">Khov Kim Se<br>QR Attendance</h1>
+                <p class="text-gray-600">Secure login to access your dashboard</p>
+            </div>
+            
+            <form id="loginForm" class="space-y-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Username</label>
+                    <input type="text" id="username" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" placeholder="Enter username" required>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Password</label>
+                    <input type="password" id="password" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" placeholder="Enter password" required>
+                </div>
+                
+                <button type="submit" class="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all transform hover:scale-105">
+                    Sign In
+                </button>
+            </form>
+            
+            <div id="loginError" class="mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg hidden"></div>
+            
+            <div class="mt-6 text-center">
+                <button onclick="showAdminLogin()" class="bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 rounded-lg font-medium transition-colors">
+                    Admin Login
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Login Screen -->
+    <div id="adminLoginScreen" class="hidden min-h-screen flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md fade-in">
+            <div class="text-center mb-8">
+                <div class="bg-gradient-to-r from-gray-600 to-gray-800 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <span class="text-white text-2xl">⚙️</span>
+                </div>
+                <h1 class="text-3xl font-bold text-gray-800 mb-2">Admin Login</h1>
+                <p class="text-gray-600">Enter your admin credentials</p>
+            </div>
+            
+            <form id="adminLoginForm" class="space-y-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Admin Username</label>
+                    <input type="text" id="adminUsername" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-transparent transition-all" placeholder="Enter admin username" required>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Admin Password</label>
+                    <input type="password" id="adminPassword" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-transparent transition-all" placeholder="Enter admin password" required>
+                </div>
+                
+                <button type="submit" class="w-full bg-gradient-to-r from-gray-600 to-gray-800 text-white py-3 rounded-lg font-semibold hover:from-gray-700 hover:to-gray-900 transition-all transform hover:scale-105">
+                    Admin Sign In
+                </button>
+            </form>
+            
+            <div id="adminLoginError" class="mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg hidden"></div>
+            
+            <div class="mt-6 text-center">
+                <button onclick="showEmployeeLogin()" class="text-gray-600 hover:text-gray-800 text-sm underline">
+                    Back to Employee Login
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Employee Dashboard -->
+    <div id="employeeDashboard" class="hidden min-h-screen">
+        <nav class="bg-white shadow-lg border-b">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center h-16">
+                    <div class="flex items-center">
+                        <span class="text-2xl">📱</span>
+                        <h1 class="ml-3 text-xl font-bold text-gray-800">Employee Dashboard</h1>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <span id="employeeWelcome" class="text-gray-600"></span>
+                        <button onclick="logout()" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors">
+                            Logout
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <!-- Rules Header -->
+            <div class="bg-white rounded-xl shadow-lg p-6 mb-8 slide-up">
+                <h2 class="text-2xl font-bold text-gray-800 mb-4 flex items-center">
+                    📋 Attendance Rules & Scanning Window
+                </h2>
+                <div class="space-y-3 text-gray-700">
+                    <p class="flex items-center"><span class="w-2 h-2 bg-blue-500 rounded-full mr-3"></span><strong>Scanning Window:</strong> You can only scan from 1 hour before your shift starts until your shift ends.</p>
+                    <p class="flex items-center"><span class="w-2 h-2 bg-green-500 rounded-full mr-3"></span><strong>✅ On-time:</strong> Scanned from 1 hour before shift until exact shift start time.</p>
+                    <p class="flex items-center"><span class="w-2 h-2 bg-yellow-500 rounded-full mr-3"></span><strong>⚠️ Late:</strong> Scanned after shift start time but before shift ends.</p>
+                    <p class="flex items-center"><span class="w-2 h-2 bg-red-500 rounded-full mr-3"></span><strong>❌ Absent:</strong> No scan recorded or scanning blocked outside window.</p>
+                    <p class="flex items-center"><span class="w-2 h-2 bg-gray-500 rounded-full mr-3"></span><strong>🚫 Blocked:</strong> Too early (>1hr before) or too late (after shift ends).</p>
+                    <div class="mt-4 p-3 bg-blue-50 rounded-lg">
+                        <p class="text-sm"><strong>Example:</strong> If your shift is 9:00 AM - 5:00 PM:</p>
+                        <p class="text-sm">• <span class="text-green-600">✅ On-time:</span> 8:00 AM - 9:00 AM</p>
+                        <p class="text-sm">• <span class="text-yellow-600">⚠️ Late:</span> 9:01 AM - 5:00 PM</p>
+                        <p class="text-sm">• <span class="text-red-600">❌ Blocked:</span> Before 8:00 AM or after 5:00 PM</p>
+                        <p class="text-sm font-medium text-blue-800">Both On-time and Late scans are allowed - only blocked scans show errors.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Dashboard Content -->
+            <div id="mainDashboardContent" class="grid md:grid-cols-2 gap-8">
+                <!-- QR Scanner Section -->
+                <div class="bg-white rounded-xl shadow-lg p-6 slide-up">
+                    <h3 class="text-xl font-bold text-gray-800 mb-4">QR Code Scanner</h3>
+                    <button id="startScanBtn" onclick="startQRScanner()" class="w-full scanner-container text-white py-4 rounded-lg font-semibold hover:opacity-90 transition-all transform hover:scale-105 mb-4">
+                        📷 Start QR Code Scanning
+                    </button>
+                    
+                    <div id="scanResult" class="mt-4 p-3 rounded-lg hidden"></div>
+                </div>
+
+                <!-- Status Widget -->
+                <div class="status-card rounded-xl shadow-lg p-6 text-white slide-up">
+                    <h3 class="text-xl font-bold mb-4">📊 This Month's Status</h3>
+                    <div id="monthlyStatus" class="space-y-3">
+                        <div class="flex justify-between items-center">
+                            <span>Total Days:</span>
+                            <span id="totalDays" class="font-bold">0</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span>On-time:</span>
+                            <span id="onTimeDays" class="font-bold">0</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span>Late:</span>
+                            <span id="lateDays" class="font-bold">0</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span>Absent:</span>
+                            <span id="absentDays" class="font-bold">0</span>
+                        </div>
+                        <div class="border-t border-white/20 pt-3 mt-3">
+                            <div class="flex justify-between items-center text-lg font-bold">
+                                <span>Attendance Rate:</span>
+                                <span id="attendanceRate">0%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Full-Screen QR Scanner -->
+            <div id="fullScreenScanner" class="hidden fixed inset-0 bg-black z-50 flex flex-col">
+                <!-- Stop Button -->
+                <div class="absolute top-4 right-4 z-10">
+                    <button onclick="stopQRScanner()" class="bg-red-500 hover:bg-red-600 text-white px-6 py-3 rounded-lg font-semibold transition-colors shadow-lg">
+                        ✕ Stop Scanning
+                    </button>
+                </div>
+                
+                <!-- Camera View -->
+                <div class="flex-1 flex items-center justify-center p-4">
+                    <div id="qr-reader" class="w-full max-w-lg"></div>
+                </div>
+                
+                <!-- Scan Success Message -->
+                <div id="scanSuccessMessage" class="hidden absolute inset-0 bg-green-600 bg-opacity-95 flex items-center justify-center">
+                    <div class="text-center text-white">
+                        <div class="text-6xl mb-4">✅</div>
+                        <h2 class="text-3xl font-bold mb-2">Scan Successful!</h2>
+                        <p class="text-xl">Attendance recorded.</p>
+                    </div>
+                </div>
+                
+                <!-- Scan Error Message -->
+                <div id="scanErrorMessage" class="hidden absolute inset-0 bg-red-600 bg-opacity-95 flex items-center justify-center">
+                    <div class="text-center text-white">
+                        <div class="text-6xl mb-4">❌</div>
+                        <h2 class="text-3xl font-bold mb-2">Invalid QR Code</h2>
+                        <p class="text-xl">Please scan the correct attendance QR code.</p>
+                        <button onclick="hideErrorAndContinueScanning()" class="mt-6 bg-white text-red-600 px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors">
+                            Try Again
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Dashboard -->
+    <div id="adminDashboard" class="hidden min-h-screen">
+        <nav class="bg-white shadow-lg border-b">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center h-16">
+                    <div class="flex items-center">
+                        <span class="text-2xl">⚙️</span>
+                        <h1 class="ml-3 text-xl font-bold text-gray-800">Admin Dashboard</h1>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <span id="adminWelcome" class="text-gray-600"></span>
+                        <button onclick="logout()" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors">
+                            Logout
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Admin Tools Navigation Bar -->
+        <div class="bg-white border-b border-gray-200 shadow-sm">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex flex-wrap items-center justify-center gap-2 py-4">
+                    <button onclick="showPage('createEmployeePage')" class="admin-nav-btn bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200">
+                        <span class="text-lg">👤</span>
+                        <span class="ml-2 font-medium">Create Employee</span>
+                    </button>
+                    
+                    <button onclick="showPage('createAdminPage')" class="admin-nav-btn bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200">
+                        <span class="text-lg">👑</span>
+                        <span class="ml-2 font-medium">Create Admin</span>
+                    </button>
+                    
+                    <button onclick="showPage('manageEmployeePage')" class="admin-nav-btn bg-green-50 hover:bg-green-100 text-green-700 border border-green-200">
+                        <span class="text-lg">✏️</span>
+                        <span class="ml-2 font-medium">Manage Users</span>
+                    </button>
+                    
+                    <button onclick="showPage('manageShiftPage')" class="admin-nav-btn bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200">
+                        <span class="text-lg">⏰</span>
+                        <span class="ml-2 font-medium">Manage Shift</span>
+                    </button>
+                    
+                    <button onclick="showPage('manualEntryPage')" class="admin-nav-btn bg-yellow-50 hover:bg-yellow-100 text-yellow-700 border border-yellow-200">
+                        <span class="text-lg">📝</span>
+                        <span class="ml-2 font-medium">Manual Entry</span>
+                    </button>
+                    
+                    <button onclick="showPage('exportDataPage')" class="admin-nav-btn bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200">
+                        <span class="text-lg">📊</span>
+                        <span class="ml-2 font-medium">Export Data</span>
+                    </button>
+                    
+                    <button onclick="showPage('qrCodeInfoPage')" class="admin-nav-btn bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200">
+                        <span class="text-lg">📄</span>
+                        <span class="ml-2 font-medium">QR Code Info</span>
+                    </button>
+                    
+                    <button onclick="manualAbsentStatusCheck()" class="admin-nav-btn bg-red-50 hover:bg-red-100 text-red-700 border border-red-200">
+                        <span class="text-lg">❌</span>
+                        <span class="ml-2 font-medium">Check Absences</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content Area -->
+        <div id="adminMainContent">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                <!-- Filter Section -->
+                <div class="bg-white rounded-xl shadow-lg p-6 mb-8 slide-up">
+                    <h2 class="text-xl font-bold text-gray-800 mb-4">🔍 Filter Attendance Records</h2>
+                    <div class="grid md:grid-cols-4 gap-4 mb-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                            <input type="date" id="filterStartDate" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                            <input type="date" id="filterEndDate" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Employee</label>
+                            <select id="filterEmployee" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                <option value="">All Employees</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                            <select id="filterStatus" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                <option value="">All Status</option>
+                                <option value="On-time">On-time</option>
+                                <option value="Late">Late</option>
+                                <option value="Absent">Absent</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="flex space-x-4">
+                        <button onclick="applyFilter()" class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg transition-colors">
+                            Apply Filter
+                        </button>
+                        <button onclick="clearFilter()" class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded-lg transition-colors">
+                            Clear Filter
+                        </button>
+                    </div>
+                    <div id="filterMessage" class="mt-3 p-2 rounded hidden"></div>
+                </div>
+
+                <!-- Attendance Records Table -->
+                <div class="bg-white rounded-xl shadow-lg p-6 mb-8 slide-up">
+                    <h2 class="text-xl font-bold text-gray-800 mb-4">📋 Attendance Records</h2>
+                    <div class="overflow-x-auto">
+                        <table class="w-full table-auto">
+                            <thead>
+                                <tr class="bg-gray-50">
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-700">Employee</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-700">Date</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-700">Shift</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-700">Scan In</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-700">Scan Out</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-700">Status</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-700">Note</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-700">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="attendanceTableBody">
+                                <!-- Records will be populated here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Employee Page -->
+    <div id="createEmployeePage" class="hidden min-h-screen">
+        <nav class="bg-white shadow-lg border-b">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center h-16">
+                    <div class="flex items-center">
+                        <span class="text-2xl">👤</span>
+                        <h1 class="ml-3 text-xl font-bold text-gray-800">Create Employee</h1>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <button onclick="goBackToDashboard()" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition-colors">
+                            ← Back to Dashboard
+                        </button>
+                        <button onclick="logout()" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors">
+                            Logout
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div class="bg-white rounded-xl shadow-lg p-8">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6">Create New Employee</h2>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Username</label>
+                        <input type="text" id="newEmpUsername" placeholder="Enter username" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Password</label>
+                        <input type="password" id="newEmpPassword" placeholder="Enter password" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Confirm Password</label>
+                        <input type="password" id="newEmpConfirmPassword" placeholder="Confirm password" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <button onclick="createEmployee()" class="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-lg font-medium transition-colors">
+                        Create Employee
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Admin Page -->
+    <div id="createAdminPage" class="hidden min-h-screen">
+        <nav class="bg-white shadow-lg border-b">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center h-16">
+                    <div class="flex items-center">
+                        <span class="text-2xl">👑</span>
+                        <h1 class="ml-3 text-xl font-bold text-gray-800">Create Admin</h1>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <button onclick="goBackToDashboard()" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition-colors">
+                            ← Back to Dashboard
+                        </button>
+                        <button onclick="logout()" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors">
+                            Logout
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div class="bg-white rounded-xl shadow-lg p-8">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6">Create New Admin</h2>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Admin Username</label>
+                        <input type="text" id="newAdminUsername" placeholder="Enter admin username" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Password</label>
+                        <input type="password" id="newAdminPassword" placeholder="Enter password" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Confirm Password</label>
+                        <input type="password" id="newAdminConfirmPassword" placeholder="Confirm password" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500">
+                    </div>
+                    <button onclick="createAdmin()" class="w-full bg-gray-600 hover:bg-gray-700 text-white py-3 rounded-lg font-medium transition-colors">
+                        Create Admin
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Manage Employee Page -->
+    <div id="manageEmployeePage" class="hidden min-h-screen">
+        <nav class="bg-white shadow-lg border-b">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center h-16">
+                    <div class="flex items-center">
+                        <span class="text-2xl">✏️</span>
+                        <h1 class="ml-3 text-xl font-bold text-gray-800">Manage Users</h1>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <button onclick="goBackToDashboard()" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition-colors">
+                            ← Back to Dashboard
+                        </button>
+                        <button onclick="logout()" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors">
+                            Logout
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div class="bg-white rounded-xl shadow-lg p-8">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6">Manage Users</h2>
+                <div class="space-y-8">
+                    <!-- Manage Employee Section -->
+                    <div class="bg-blue-50 p-6 rounded-lg">
+                        <h3 class="text-lg font-semibold text-blue-900 mb-4">Manage Employee</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Action</label>
+                                <select id="empActionSelect" onchange="toggleEmployeeAction()" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                    <option value="create">Create New</option>
+                                    <option value="update">Update Existing</option>
+                                </select>
+                            </div>
+                            
+                            <!-- Create Employee Form -->
+                            <div id="createEmployeeForm" class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">New Username</label>
+                                    <input type="text" id="createEmpUsername" placeholder="Enter username" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">New Password</label>
+                                    <input type="password" id="createEmpPassword" placeholder="Enter password" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Confirm Password</label>
+                                    <input type="password" id="createEmpConfirmPassword" placeholder="Confirm password" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                                </div>
+                                <button onclick="createEmployeeFromManage()" class="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-lg font-medium transition-colors">
+                                    Create Employee
+                                </button>
+                            </div>
+                            
+                            <!-- Update Employee Form -->
+                            <div id="updateEmployeeForm" class="hidden space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Select Employee</label>
+                                    <select id="manageEmpSelect" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
+                                        <option value="">Select Employee</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">New Username</label>
+                                    <input type="text" id="manageEmpUsername" placeholder="Enter new username" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">New Password</label>
+                                    <input type="password" id="manageEmpPassword" placeholder="Enter new password" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
+                                </div>
+                                <div class="flex space-x-4">
+                                    <button onclick="updateEmployee()" class="flex-1 bg-green-500 hover:bg-green-600 text-white py-3 rounded-lg font-medium transition-colors">
+                                        Update Employee
+                                    </button>
+                                    <button onclick="removeEmployee()" class="flex-1 bg-red-500 hover:bg-red-600 text-white py-3 rounded-lg font-medium transition-colors">
+                                        Remove Employee
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Manage Admin Section -->
+                    <div class="bg-gray-50 p-6 rounded-lg">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Manage Admin</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Action</label>
+                                <select id="adminActionSelect" onchange="toggleAdminAction()" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500">
+                                    <option value="create">Create New</option>
+                                    <option value="update">Update Existing</option>
+                                </select>
+                            </div>
+                            
+                            <!-- Create Admin Form -->
+                            <div id="createAdminForm" class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">New Username</label>
+                                    <input type="text" id="createAdminUsername" placeholder="Enter admin username" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">New Password</label>
+                                    <input type="password" id="createAdminPassword" placeholder="Enter password" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Confirm Password</label>
+                                    <input type="password" id="createAdminConfirmPassword" placeholder="Confirm password" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500">
+                                </div>
+                                <button onclick="createAdminFromManage()" class="w-full bg-gray-600 hover:bg-gray-700 text-white py-3 rounded-lg font-medium transition-colors">
+                                    Create Admin
+                                </button>
+                            </div>
+                            
+                            <!-- Update Admin Form -->
+                            <div id="updateAdminForm" class="hidden space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Select Admin</label>
+                                    <select id="manageAdminSelect" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500">
+                                        <option value="">Select Admin</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">New Username</label>
+                                    <input type="text" id="manageAdminUsername" placeholder="Enter new username" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">New Password</label>
+                                    <input type="password" id="manageAdminPassword" placeholder="Enter new password" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500">
+                                </div>
+                                <div class="flex space-x-4">
+                                    <button onclick="updateAdmin()" class="flex-1 bg-gray-600 hover:bg-gray-700 text-white py-3 rounded-lg font-medium transition-colors">
+                                        Update Admin
+                                    </button>
+                                    <button onclick="removeAdmin()" class="flex-1 bg-red-500 hover:bg-red-600 text-white py-3 rounded-lg font-medium transition-colors">
+                                        Remove Admin
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Manage Shift Page -->
+    <div id="manageShiftPage" class="hidden min-h-screen">
+        <nav class="bg-white shadow-lg border-b">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center h-16">
+                    <div class="flex items-center">
+                        <span class="text-2xl">⏰</span>
+                        <h1 class="ml-3 text-xl font-bold text-gray-800">Manage Employee Shifts</h1>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <button onclick="goBackToDashboard()" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition-colors">
+                            ← Back to Dashboard
+                        </button>
+                        <button onclick="logout()" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors">
+                            Logout
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <!-- Step 1: Employee Selection -->
+            <div class="bg-white rounded-xl shadow-lg p-8 mb-8">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6">Manage Employee Shifts</h2>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Select Employee</label>
+                    <select id="shiftEmployeeSelect" onchange="loadEmployeeShifts()" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-lg">
+                        <option value="">Choose an employee to manage their shifts</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Step 2: Employee Shifts Management (Hidden initially) -->
+            <div id="employeeShiftsSection" class="hidden">
+                <!-- Current Shifts Display -->
+                <div class="bg-white rounded-xl shadow-lg p-8 mb-8">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 id="currentShiftsTitle" class="text-xl font-bold text-gray-800">Current Shifts for Employee</h3>
+                        <button onclick="showAddShiftForm()" id="addShiftBtn" class="bg-purple-500 hover:bg-purple-600 text-white px-6 py-3 rounded-lg font-medium transition-colors">
+                            + Add Shift
+                        </button>
+                    </div>
+                    
+                    <div id="employeeShiftsList" class="space-y-4">
+                        <!-- Employee shifts will be populated here -->
+                    </div>
+                </div>
+
+                <!-- Add New Shift Form -->
+                <div id="addShiftFormSection" class="hidden bg-white rounded-xl shadow-lg p-8">
+                    <h3 class="text-xl font-bold text-gray-800 mb-6">Add New Shift</h3>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Shift Name</label>
+                            <input type="text" id="shiftName" placeholder="e.g., Morning Shift, Evening Shift" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Start Time</label>
+                                <input type="time" id="shiftStart" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">End Time</label>
+                                <input type="time" id="shiftEnd" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-3">Working Days</label>
+                            <div class="grid grid-cols-4 gap-3">
+                                <label class="flex items-center space-x-2">
+                                    <input type="checkbox" id="dayMon" class="rounded">
+                                    <span>Monday</span>
+                                </label>
+                                <label class="flex items-center space-x-2">
+                                    <input type="checkbox" id="dayTue" class="rounded">
+                                    <span>Tuesday</span>
+                                </label>
+                                <label class="flex items-center space-x-2">
+                                    <input type="checkbox" id="dayWed" class="rounded">
+                                    <span>Wednesday</span>
+                                </label>
+                                <label class="flex items-center space-x-2">
+                                    <input type="checkbox" id="dayThu" class="rounded">
+                                    <span>Thursday</span>
+                                </label>
+                                <label class="flex items-center space-x-2">
+                                    <input type="checkbox" id="dayFri" class="rounded">
+                                    <span>Friday</span>
+                                </label>
+                                <label class="flex items-center space-x-2">
+                                    <input type="checkbox" id="daySat" class="rounded">
+                                    <span>Saturday</span>
+                                </label>
+                                <label class="flex items-center space-x-2">
+                                    <input type="checkbox" id="daySun" class="rounded">
+                                    <span>Sunday</span>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div class="flex space-x-4">
+                            <button onclick="saveNewShift()" class="flex-1 bg-purple-500 hover:bg-purple-600 text-white py-3 rounded-lg font-medium transition-colors">
+                                Save Shift
+                            </button>
+                            <button onclick="cancelAddShift()" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-3 rounded-lg font-medium transition-colors">
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Edit Shift Form (Hidden initially) -->
+                <div id="editShiftFormSection" class="hidden bg-white rounded-xl shadow-lg p-8">
+                    <h3 class="text-xl font-bold text-gray-800 mb-6">Edit Shift</h3>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Shift Name</label>
+                            <input type="text" id="editShiftName" placeholder="e.g., Morning Shift, Evening Shift" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Start Time</label>
+                                <input type="time" id="editShiftStart" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">End Time</label>
+                                <input type="time" id="editShiftEnd" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-3">Working Days</label>
+                            <div class="grid grid-cols-4 gap-3">
+                                <label class="flex items-center space-x-2">
+                                    <input type="checkbox" id="editDayMon" class="rounded">
+                                    <span>Monday</span>
+                                </label>
+                                <label class="flex items-center space-x-2">
+                                    <input type="checkbox" id="editDayTue" class="rounded">
+                                    <span>Tuesday</span>
+                                </label>
+                                <label class="flex items-center space-x-2">
+                                    <input type="checkbox" id="editDayWed" class="rounded">
+                                    <span>Wednesday</span>
+                                </label>
+                                <label class="flex items-center space-x-2">
+                                    <input type="checkbox" id="editDayThu" class="rounded">
+                                    <span>Thursday</span>
+                                </label>
+                                <label class="flex items-center space-x-2">
+                                    <input type="checkbox" id="editDayFri" class="rounded">
+                                    <span>Friday</span>
+                                </label>
+                                <label class="flex items-center space-x-2">
+                                    <input type="checkbox" id="editDaySat" class="rounded">
+                                    <span>Saturday</span>
+                                </label>
+                                <label class="flex items-center space-x-2">
+                                    <input type="checkbox" id="editDaySun" class="rounded">
+                                    <span>Sunday</span>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div class="flex space-x-4">
+                            <button onclick="updateShift()" class="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-lg font-medium transition-colors">
+                                Update Shift
+                            </button>
+                            <button onclick="cancelEditShift()" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-3 rounded-lg font-medium transition-colors">
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Manual Entry Page -->
+    <div id="manualEntryPage" class="hidden min-h-screen">
+        <nav class="bg-white shadow-lg border-b">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center h-16">
+                    <div class="flex items-center">
+                        <span class="text-2xl">📝</span>
+                        <h1 class="ml-3 text-xl font-bold text-gray-800">Manual Entry</h1>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <button onclick="goBackToDashboard()" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition-colors">
+                            ← Back to Dashboard
+                        </button>
+                        <button onclick="logout()" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors">
+                            Logout
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div class="bg-white rounded-xl shadow-lg p-8">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6">Add Manual Attendance Entry</h2>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Select Employee</label>
+                        <select id="manualEmpSelect" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500">
+                            <option value="">Select Employee</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Date</label>
+                        <input type="date" id="manualDate" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500">
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Scan In Time</label>
+                            <input type="time" id="manualScanIn" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Scan Out Time (Optional)</label>
+                            <input type="time" id="manualScanOut" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Note (Optional)</label>
+                        <input type="text" id="manualNote" placeholder="Add a note about this entry" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500">
+                    </div>
+                    <button onclick="addManualEntry()" class="w-full bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-lg font-medium transition-colors">
+                        Add Manual Entry
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Export Data Page -->
+    <div id="exportDataPage" class="hidden min-h-screen">
+        <nav class="bg-white shadow-lg border-b">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center h-16">
+                    <div class="flex items-center">
+                        <span class="text-2xl">📊</span>
+                        <h1 class="ml-3 text-xl font-bold text-gray-800">Export Data</h1>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <button onclick="goBackToDashboard()" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition-colors">
+                            ← Back to Dashboard
+                        </button>
+                        <button onclick="logout()" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors">
+                            Logout
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div class="bg-white rounded-xl shadow-lg p-8">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6">Export Attendance Data</h2>
+                <div class="space-y-6">
+                    <div class="bg-blue-50 p-4 rounded-lg">
+                        <h3 class="font-medium text-blue-900 mb-2">Export Information</h3>
+                        <p class="text-blue-800 text-sm">This will export all attendance records to an Excel file (.xlsx) for analysis and reporting purposes. The file will include employee names, dates, shift times, scan times, status, and notes.</p>
+                    </div>
+                    <button onclick="exportToExcel()" class="w-full bg-green-600 hover:bg-green-700 text-white py-4 rounded-lg font-medium transition-colors text-lg">
+                        📥 Export to Excel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- QR Code Info Page -->
+    <div id="qrCodeInfoPage" class="hidden min-h-screen">
+        <nav class="bg-white shadow-lg border-b">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center h-16">
+                    <div class="flex items-center">
+                        <span class="text-2xl">📄</span>
+                        <h1 class="ml-3 text-xl font-bold text-gray-800">QR Code Info</h1>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <button onclick="goBackToDashboard()" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition-colors">
+                            ← Back to Dashboard
+                        </button>
+                        <button onclick="logout()" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors">
+                            Logout
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div class="space-y-8">
+                <!-- QR Code Configuration -->
+                <div class="bg-white rounded-xl shadow-lg p-8">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6">QR Code Configuration</h2>
+                    <div class="space-y-6">
+                        <div class="bg-yellow-50 p-4 rounded-lg">
+                            <h3 class="font-medium text-yellow-900 mb-2">Important Information</h3>
+                            <p class="text-yellow-800 text-sm">The QR code must contain the exact text specified below for employees to successfully scan their attendance. Make sure to update your physical QR codes if you change this text.</p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Required QR Code Text</label>
+                            <input type="text" id="qrCodeText" value="KHOVKIMSE-ATTENDANCE" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                        <button onclick="updateQRCodeText()" class="w-full bg-indigo-500 hover:bg-indigo-600 text-white py-3 rounded-lg font-medium transition-colors">
+                            Update QR Code Text
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Scanning Location Geofence -->
+                <div class="bg-white rounded-xl shadow-lg p-8">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6">📍 Scanning Location Geofence</h2>
+                    <div class="space-y-6">
+                        <div class="bg-blue-50 p-4 rounded-lg">
+                            <h3 class="font-medium text-blue-900 mb-2">Location Security</h3>
+                            <p class="text-blue-800 text-sm">Set a specific workplace location where employees can scan their attendance. This prevents remote scanning and ensures physical presence at work.</p>
+                        </div>
+                        
+                        <!-- Current Location Display -->
+                        <div class="border border-gray-200 rounded-lg p-4">
+                            <h3 class="font-medium text-gray-700 mb-3">Current Set Location</h3>
+                            <div id="currentLocationDisplay" class="text-gray-600">
+                                <p id="locationStatus">📍 No location set yet</p>
+                                <p id="locationCoords" class="text-sm text-gray-500 hidden"></p>
+                                <p class="text-sm font-medium mt-2">📏 Allowed Radius: <span class="text-indigo-600">100 meters</span></p>
+                            </div>
+                        </div>
+
+                        <!-- Set Location Button -->
+                        <button onclick="openLocationSetter()" class="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-lg font-medium transition-colors">
+                            📍 Set Scanning Location
+                        </button>
+
+                        <!-- Location Controls -->
+                        <div class="flex space-x-4">
+                            <button onclick="testCurrentLocation()" class="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-lg font-medium transition-colors">
+                                🧪 Test Current Location
+                            </button>
+                            <button onclick="clearScanningLocation()" class="flex-1 bg-red-500 hover:bg-red-600 text-white py-3 rounded-lg font-medium transition-colors">
+                                🗑️ Clear Location
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Location Setter Modal -->
+    <div id="locationSetterModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div class="p-6 border-b border-gray-200">
+                <h2 class="text-2xl font-bold text-gray-800">Set Scanning Location</h2>
+                <p class="text-gray-600 mt-1">Choose the workplace location where employees can scan attendance</p>
+            </div>
+            
+            <div class="p-6 space-y-6">
+                <!-- Location Options -->
+                <div class="grid md:grid-cols-2 gap-4">
+                    <button onclick="useCurrentLocationForScanning()" class="bg-blue-500 hover:bg-blue-600 text-white p-4 rounded-lg font-medium transition-colors">
+                        📍 Use Current Location
+                    </button>
+                    <button onclick="searchLocationForScanning()" class="bg-green-500 hover:bg-green-600 text-white p-4 rounded-lg font-medium transition-colors">
+                        🔍 Search Address
+                    </button>
+                </div>
+
+                <!-- Address Search -->
+                <div id="addressSearchSection" class="hidden space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Search Address</label>
+                        <div class="flex space-x-2">
+                            <input type="text" id="addressSearchInput" placeholder="Enter workplace address..." class="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
+                            <button onclick="searchAddress()" class="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-lg font-medium transition-colors">
+                                Search
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Map Container -->
+                <div id="mapContainer" class="hidden">
+                    <div class="bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+                        <div class="text-4xl mb-4">🗺️</div>
+                        <h3 class="text-lg font-medium text-gray-700 mb-2">Interactive Map</h3>
+                        <p class="text-gray-600 mb-4">Click on the map to set the exact scanning location</p>
+                        <div id="selectedLocationInfo" class="hidden bg-blue-50 p-4 rounded-lg">
+                            <p class="font-medium text-blue-900">Selected Location:</p>
+                            <p id="selectedLocationText" class="text-blue-800"></p>
+                            <p id="selectedLocationCoords" class="text-sm text-blue-600"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Location Status -->
+                <div id="locationSetterStatus" class="hidden p-4 rounded-lg"></div>
+            </div>
+            
+            <div class="p-6 border-t border-gray-200 flex space-x-4">
+                <button onclick="saveSelectedLocation()" id="saveLocationBtn" class="flex-1 bg-indigo-500 hover:bg-indigo-600 text-white py-3 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                    💾 Save This Location
+                </button>
+                <button onclick="cancelLocationSetter()" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-3 rounded-lg font-medium transition-colors">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Attendance Record Modal -->
+    <div id="editAttendanceModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div class="p-6 border-b border-gray-200">
+                <h2 class="text-2xl font-bold text-gray-800">Edit Attendance Record</h2>
+            </div>
+            
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Employee</label>
+                    <select id="editAttEmployee" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        <option value="">Select Employee</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Date</label>
+                    <input type="date" id="editAttDate" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Shift</label>
+                    <input type="text" id="editAttShift" placeholder="e.g., Morning Shift, Evening Shift" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Scan In Time</label>
+                        <input type="time" id="editAttScanIn" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Scan Out Time</label>
+                        <input type="time" id="editAttScanOut" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                    <select id="editAttStatus" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        <option value="On-time">On-time</option>
+                        <option value="Late">Late</option>
+                        <option value="Absent">Absent</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Note</label>
+                    <textarea id="editAttNote" rows="3" placeholder="Add any notes about this attendance record" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
+                </div>
+            </div>
+            
+            <div class="p-6 border-t border-gray-200 flex space-x-4">
+                <button onclick="saveAttendanceEdit()" class="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-lg font-medium transition-colors">
+                    Save Changes
+                </button>
+                <button onclick="cancelAttendanceEdit()" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-3 rounded-lg font-medium transition-colors">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let currentUser = null;
+        let isAdmin = false;
+        let html5QrCode = null;
+        let attendanceData = [];
+        let employees = [];
+        let admins = [];
+        let shifts = {};
+        let qrCodeRequiredText = 'KHOVKIMSE-ATTENDANCE';
+        let currentEditingAttendance = null;
+        let sidebarExpanded = false;
+        let currentFilteredData = []; // Track currently filtered/visible data
+        
+        // Location geofencing variables
+        let scanningLocation = null; // {lat, lng, address}
+        let selectedLocationForSetting = null;
+        let allowedRadius = 100; // meters
+
+        // Notification System
+        function showNotification(message, type = 'info', duration = 4000) {
+            // Remove any existing notifications
+            const existingNotifications = document.querySelectorAll('.notification');
+            existingNotifications.forEach(notification => {
+                notification.remove();
+            });
+
+            // Create notification element
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 18px;">
+                        ${type === 'success' ? '✅' : type === 'error' ? '❌' : type === 'warning' ? '⚠️' : 'ℹ️'}
+                    </span>
+                    <span>${message}</span>
+                </div>
+            `;
+
+            // Add to document
+            document.body.appendChild(notification);
+
+            // Show notification with animation
+            setTimeout(() => {
+                notification.classList.add('show');
+            }, 100);
+
+            // Auto-hide notification
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.remove();
+                    }
+                }, 300);
+            }, duration);
+        }
+
+        function showSuccess(action) {
+            showNotification(`Success: ${action} completed successfully.`, 'success');
+        }
+
+        function showError(action, details = '') {
+            const message = details ? `Error: ${action} failed. ${details}` : `Error: ${action} failed. Please try again.`;
+            showNotification(message, 'error');
+        }
+
+        function showWarning(message) {
+            showNotification(`Warning: ${message}`, 'warning');
+        }
+
+        function showInfo(message) {
+            showNotification(message, 'info');
+        }
+
+        // Initialize the application
+        function initApp() {
+            loadStoredData();
+            checkExistingSession();
+            setupDefaultAccounts();
+            
+            // Start automatic absent status generation
+            initializeAbsentStatusGeneration();
+        }
+
+        // Load data from localStorage
+        function loadStoredData() {
+            const storedAttendance = localStorage.getItem('attendanceData');
+            if (storedAttendance) {
+                attendanceData = JSON.parse(storedAttendance);
+                // Clean old attendance data (older than 2 years for admin, monthly for employees)
+                cleanOldData();
+            }
+
+            const storedEmployees = localStorage.getItem('employees');
+            if (storedEmployees) {
+                employees = JSON.parse(storedEmployees);
+            }
+
+            const storedAdmins = localStorage.getItem('admins');
+            if (storedAdmins) {
+                admins = JSON.parse(storedAdmins);
+            }
+
+            const storedShifts = localStorage.getItem('shifts');
+            if (storedShifts) {
+                shifts = JSON.parse(storedShifts);
+            }
+
+            const storedQRText = localStorage.getItem('qrCodeRequiredText');
+            if (storedQRText) {
+                qrCodeRequiredText = storedQRText;
+                document.getElementById('qrCodeText').value = qrCodeRequiredText;
+            }
+
+            const storedScanningLocation = localStorage.getItem('scanningLocation');
+            if (storedScanningLocation) {
+                scanningLocation = JSON.parse(storedScanningLocation);
+                updateLocationDisplay();
+            }
+        }
+
+        // Setup default accounts
+        function setupDefaultAccounts() {
+            // Default employee account
+            if (!employees.find(emp => emp.username === 'keangann')) {
+                employees.push({
+                    id: 'emp_' + Date.now(),
+                    username: 'keangann',
+                    password: 'password123'
+                });
+            }
+
+            // Default admin account (cannot be removed)
+            if (!admins.find(admin => admin.username === 'ann')) {
+                admins.push({
+                    id: 'admin_' + Date.now(),
+                    username: 'ann',
+                    password: 'password123',
+                    permanent: true
+                });
+            }
+
+            saveData();
+        }
+
+        // Check for existing session
+        function checkExistingSession() {
+            const session = localStorage.getItem('userSession');
+            if (session) {
+                try {
+                    const sessionData = JSON.parse(session);
+                    
+                    // Validate session data
+                    if (!sessionData.user || typeof sessionData.isAdmin !== 'boolean') {
+                        throw new Error('Invalid session data');
+                    }
+                    
+                    // Verify user still exists in the system
+                    const userExists = sessionData.isAdmin ? 
+                        admins.find(admin => admin.username === sessionData.user.username) :
+                        employees.find(emp => emp.username === sessionData.user.username);
+                    
+                    if (!userExists) {
+                        throw new Error('User no longer exists');
+                    }
+                    
+                    currentUser = sessionData.user;
+                    isAdmin = sessionData.isAdmin;
+                    
+                    // Redirect to appropriate dashboard based on role
+                    if (isAdmin) {
+                        showAdminDashboard();
+                    } else {
+                        showEmployeeDashboard();
+                    }
+                } catch (error) {
+                    // Invalid session - clear it and show login
+                    localStorage.removeItem('userSession');
+                    showEmployeeLogin();
+                }
+            }
+        }
+
+        // Clean old data based on rules
+        function cleanOldData() {
+            const now = new Date();
+            const twoYearsAgo = new Date(now.getFullYear() - 2, now.getMonth(), now.getDate());
+            
+            // For admin: remove data older than 2 years
+            attendanceData = attendanceData.filter(record => {
+                const recordDate = new Date(record.date);
+                return recordDate >= twoYearsAgo;
+            });
+
+            // For employee view: remove data from previous months (handled in updateMonthlyStatus)
+        }
+
+        // Login functionality
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            // Check employee accounts only
+            const employee = employees.find(e => e.username === username && e.password === password);
+            if (employee) {
+                currentUser = employee;
+                isAdmin = false;
+                saveSession();
+                showSuccess('Login');
+                setTimeout(() => {
+                    showEmployeeDashboard();
+                }, 1000);
+                return;
+            }
+            
+            // Invalid credentials
+            showError('Login', 'Please check your username and password.');
+        });
+
+        // Admin login functionality
+        document.getElementById('adminLoginForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const username = document.getElementById('adminUsername').value;
+            const password = document.getElementById('adminPassword').value;
+            
+            // Check admin accounts only
+            const admin = admins.find(a => a.username === username && a.password === password);
+            if (admin) {
+                currentUser = admin;
+                isAdmin = true;
+                saveSession();
+                showSuccess('Admin login');
+                setTimeout(() => {
+                    showAdminDashboard();
+                }, 1000);
+                return;
+            }
+            
+            // Invalid credentials
+            showError('Admin login', 'Please check your username and password.');
+        });
+
+        // Save user session
+        function saveSession() {
+            const sessionData = {
+                user: currentUser,
+                isAdmin: isAdmin
+            };
+            localStorage.setItem('userSession', JSON.stringify(sessionData));
+        }
+
+
+
+        // Show admin login screen
+        function showAdminLogin() {
+            document.getElementById('loginScreen').classList.add('hidden');
+            document.getElementById('adminLoginScreen').classList.remove('hidden');
+            
+            // Clear admin login form
+            document.getElementById('adminUsername').value = '';
+            document.getElementById('adminPassword').value = '';
+        }
+
+        // Show employee login screen
+        function showEmployeeLogin() {
+            document.getElementById('adminLoginScreen').classList.add('hidden');
+            document.getElementById('loginScreen').classList.remove('hidden');
+            
+            // Clear employee login form
+            document.getElementById('username').value = '';
+            document.getElementById('password').value = '';
+        }
+
+        // Show employee dashboard
+        function showEmployeeDashboard() {
+            // Hide ALL pages including admin pages
+            hideAllPages();
+            
+            // Only show employee dashboard
+            document.getElementById('employeeDashboard').classList.remove('hidden');
+            
+            document.getElementById('employeeWelcome').textContent = `Welcome, ${currentUser.username}`;
+            updateMonthlyStatus();
+            updateScanButtonState();
+        }
+
+        // Show admin dashboard
+        function showAdminDashboard() {
+            // Hide all pages
+            hideAllPages();
+            
+            // Only show admin dashboard
+            document.getElementById('adminDashboard').classList.remove('hidden');
+            
+            document.getElementById('adminWelcome').textContent = `Welcome, ${currentUser.username}`;
+            populateEmployeeSelects();
+            populateManualEntryEmployeeSelect();
+            
+            // CRITICAL: Initialize with all data visible (no filters applied)
+            // This ensures currentFilteredData always contains what's visible in the table
+            currentFilteredData = [...attendanceData];
+            loadAttendanceTable(currentFilteredData);
+            
+            loadExistingShifts();
+            document.getElementById('qrCodeText').value = qrCodeRequiredText;
+        }
+
+        // Hide all pages
+        function hideAllPages() {
+            const pages = [
+                'loginScreen', 'adminLoginScreen', 'employeeDashboard', 'adminDashboard',
+                'createEmployeePage', 'createAdminPage', 'manageEmployeePage', 
+                'manageShiftPage', 'manualEntryPage', 'exportDataPage', 'qrCodeInfoPage'
+            ];
+            
+            pages.forEach(pageId => {
+                document.getElementById(pageId).classList.add('hidden');
+            });
+        }
+
+        // Role-based access control - prevent unauthorized access
+        function enforceRoleBasedAccess() {
+            if (!currentUser) {
+                // No user logged in - redirect to login
+                showEmployeeLogin();
+                return false;
+            }
+            
+            return true;
+        }
+
+        // Admin-only function wrapper
+        function requireAdminAccess(callback) {
+            if (!enforceRoleBasedAccess()) return;
+            
+            if (!isAdmin) {
+                showError('Access denied', 'You do not have permission to access this feature.');
+                return;
+            }
+            
+            callback();
+        }
+
+        // Show specific page (admin-only)
+        function showPage(pageId) {
+            requireAdminAccess(() => {
+                hideAllPages();
+                document.getElementById(pageId).classList.remove('hidden');
+                
+                // Populate employee selects when needed
+                if (pageId === 'manageEmployeePage' || pageId === 'manualEntryPage') {
+                    populateEmployeeSelects();
+                }
+                
+                // Initialize shift management page
+                if (pageId === 'manageShiftPage') {
+                    populateShiftEmployeeSelect();
+                    resetShiftManagementPage();
+                }
+                
+                // Set QR code text for QR code info page
+                if (pageId === 'qrCodeInfoPage') {
+                    document.getElementById('qrCodeText').value = qrCodeRequiredText;
+                }
+                
+                // Ensure manual entry dropdown is populated
+                if (pageId === 'manualEntryPage') {
+                    populateManualEntryEmployeeSelect();
+                }
+            });
+        }
+
+        // Go back to admin dashboard (admin-only)
+        function goBackToDashboard() {
+            requireAdminAccess(() => {
+                showAdminDashboard();
+            });
+        }
+
+        // Update monthly status for employee
+        function updateMonthlyStatus() {
+            const now = new Date();
+            const currentMonth = now.getMonth();
+            const currentYear = now.getFullYear();
+            
+            // Filter attendance for current user and current month
+            const monthlyRecords = attendanceData.filter(record => {
+                const recordDate = new Date(record.date);
+                return record.employee === currentUser.username && 
+                       recordDate.getMonth() === currentMonth && 
+                       recordDate.getFullYear() === currentYear;
+            });
+            
+            const totalDays = monthlyRecords.length;
+            const onTimeDays = monthlyRecords.filter(r => r.status === 'On-time').length;
+            const lateDays = monthlyRecords.filter(r => r.status === 'Late').length;
+            const absentDays = monthlyRecords.filter(r => r.status === 'Absent').length;
+            const attendanceRate = totalDays > 0 ? Math.round(((onTimeDays + lateDays) / totalDays) * 100) : 0;
+            
+            document.getElementById('totalDays').textContent = totalDays;
+            document.getElementById('onTimeDays').textContent = onTimeDays;
+            document.getElementById('lateDays').textContent = lateDays;
+            document.getElementById('absentDays').textContent = absentDays;
+            document.getElementById('attendanceRate').textContent = attendanceRate + '%';
+        }
+
+        // QR Scanner functionality
+        function startQRScanner() {
+            // Check if button is disabled
+            const scanBtn = document.getElementById('startScanBtn');
+            if (scanBtn.disabled) {
+                return; // Don't start scanner if button is disabled
+            }
+            
+            // Check if location is required and validate
+            if (scanningLocation) {
+                checkLocationAndStartScanner();
+            } else {
+                // No location restriction, start scanner directly
+                startCameraScanner();
+            }
+        }
+
+        function checkLocationAndStartScanner() {
+            showInfo('Getting fresh location...');
+            
+            if (!navigator.geolocation) {
+                showError('Location check', 'Geolocation is not supported by this device.');
+                return;
+            }
+
+            // CRITICAL FIX: Always request fresh location with maximumAge: 0
+            // This forces the browser to get a new GPS reading every time
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const userLat = position.coords.latitude;
+                    const userLng = position.coords.longitude;
+                    const accuracy = position.coords.accuracy;
+                    
+                    console.log(`Fresh location obtained: ${userLat}, ${userLng} (accuracy: ${accuracy}m)`);
+                    
+                    const distance = calculateDistance(
+                        userLat, userLng,
+                        scanningLocation.lat, scanningLocation.lng
+                    );
+                    
+                    console.log(`Distance to workplace: ${distance}m (allowed: ${allowedRadius}m)`);
+                    
+                    if (distance <= allowedRadius) {
+                        showSuccess(`Location verified (${Math.round(distance)}m away) - Starting scanner`);
+                        setTimeout(() => {
+                            startCameraScanner();
+                        }, 1000);
+                    } else {
+                        showError('Location check', `You must be at the designated workplace location to scan. You are ${Math.round(distance)}m away (allowed: ${allowedRadius}m).`);
+                    }
+                },
+                (error) => {
+                    let errorMessage = 'Unable to get your current location. ';
+                    switch(error.code) {
+                        case error.PERMISSION_DENIED:
+                            errorMessage += 'Please allow location access to scan attendance. Refresh the page and try again.';
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            errorMessage += 'Location information is unavailable. Please check your GPS settings.';
+                            break;
+                        case error.TIMEOUT:
+                            errorMessage += 'Location request timed out. Please try again.';
+                            break;
+                        default:
+                            errorMessage += 'An unknown error occurred while getting your location.';
+                            break;
+                    }
+                    showError('Location access', errorMessage);
+                },
+                {
+                    enableHighAccuracy: true,    // Request most accurate location possible
+                    timeout: 15000,              // Increased timeout for better accuracy
+                    maximumAge: 0                // CRITICAL: Never use cached location - always get fresh GPS reading
+                }
+            );
+        }
+
+        function startCameraScanner() {
+            // Hide main dashboard content and show full-screen scanner
+            document.getElementById('mainDashboardContent').classList.add('hidden');
+            document.getElementById('fullScreenScanner').classList.remove('hidden');
+            
+            html5QrCode = new Html5Qrcode("qr-reader");
+            
+            html5QrCode.start(
+                { facingMode: "environment" },
+                {
+                    fps: 10,
+                    qrbox: { width: 300, height: 300 }
+                },
+                (decodedText, decodedResult) => {
+                    handleQRScan(decodedText);
+                },
+                (errorMessage) => {
+                    // Handle scan errors silently
+                }
+            ).catch(err => {
+                console.error('Error starting QR scanner:', err);
+                showFullScreenError('Camera access denied or not available. Please check your camera permissions.');
+            });
+        }
+
+        function stopQRScanner() {
+            if (html5QrCode) {
+                html5QrCode.stop().then(() => {
+                    html5QrCode.clear();
+                    html5QrCode = null;
+                }).catch(err => {
+                    console.error('Error stopping scanner:', err);
+                });
+            }
+            
+            // Hide full-screen scanner and show main dashboard
+            document.getElementById('fullScreenScanner').classList.add('hidden');
+            document.getElementById('mainDashboardContent').classList.remove('hidden');
+            
+            // Hide any messages
+            document.getElementById('scanSuccessMessage').classList.add('hidden');
+            document.getElementById('scanErrorMessage').classList.add('hidden');
+        }
+
+        function handleQRScan(scannedText) {
+            if (scannedText === qrCodeRequiredText) {
+                // Valid QR code - record attendance and show success
+                recordAttendance();
+                showScanSuccess();
+            } else {
+                // Invalid QR code - show error message
+                showScanError();
+            }
+        }
+
+        function showScanSuccess() {
+            // Update the success message based on scan type
+            const today = new Date().toISOString().split('T')[0];
+            const existingRecord = attendanceData.find(record => 
+                record.employee === currentUser.username && record.date === today
+            );
+            
+            const successDiv = document.getElementById('scanSuccessMessage');
+            const messageContent = successDiv.querySelector('div');
+            
+            if (existingRecord && existingRecord.scanOut) {
+                // Just completed scan out
+                messageContent.innerHTML = `
+                    <div class="text-6xl mb-4">✅</div>
+                    <h2 class="text-3xl font-bold mb-2">Scan Out Successful!</h2>
+                    <p class="text-xl">Have a great day! Your attendance is complete.</p>
+                `;
+            } else {
+                // Just completed scan in
+                messageContent.innerHTML = `
+                    <div class="text-6xl mb-4">✅</div>
+                    <h2 class="text-3xl font-bold mb-2">Scan In Successful!</h2>
+                    <p class="text-xl">Welcome to work! Remember to scan out when you leave.</p>
+                `;
+            }
+            
+            successDiv.classList.remove('hidden');
+            
+            // Auto-close after 3 seconds
+            setTimeout(() => {
+                stopQRScanner();
+            }, 3000);
+        }
+
+        function showScanError() {
+            document.getElementById('scanErrorMessage').classList.remove('hidden');
+        }
+
+        function hideErrorAndContinueScanning() {
+            document.getElementById('scanErrorMessage').classList.add('hidden');
+        }
+
+        function showFullScreenError(message) {
+            // Show error and return to dashboard
+            showError('Camera access', message);
+            stopQRScanner();
+        }
+
+        function recordAttendance() {
+            const now = new Date();
+            const today = now.toISOString().split('T')[0];
+            const currentTime = now.toTimeString().split(' ')[0].substring(0, 5);
+            const currentMinutes = timeToMinutes(currentTime);
+            
+            console.log(`=== RECORDING ATTENDANCE for ${currentUser.username} at ${currentTime} ===`);
+            
+            // Get employee's shifts for today
+            const employeeShifts = shifts[currentUser.username] || [];
+            const todayShifts = getAllTodayShifts(employeeShifts);
+            
+            console.log(`Employee shifts for ${currentUser.username}:`, employeeShifts);
+            console.log(`Today's shifts:`, todayShifts);
+            
+            if (todayShifts.length === 0) {
+                showError('Attendance scan', 'No shift assigned for today. Please contact your administrator.');
+                return;
+            }
+            
+            // Find the active shift for current time
+            const activeShift = findActiveShiftForTime(todayShifts, currentMinutes);
+            
+            if (!activeShift) {
+                showError('Attendance scan', 'No active shift found for current time. Please scan during your shift hours.');
+                return;
+            }
+            
+            console.log(`Using active shift: ${activeShift.name} (${activeShift.startTime} - ${activeShift.endTime})`);
+            
+            // Get all existing records for today
+            const todayRecords = attendanceData.filter(record => 
+                record.employee === currentUser.username && record.date === today
+            );
+            
+            console.log(`Existing records for today:`, todayRecords);
+            
+            // Check if there's already a record for this specific shift
+            const shiftRecord = todayRecords.find(record => record.shift === activeShift.name);
+            
+            if (shiftRecord) {
+                // SCAN OUT LOGIC - Employee already has a record for this shift
+                console.log(`Found existing record for ${activeShift.name}:`, shiftRecord);
+                
+                if (shiftRecord.scanOut) {
+                    // Already scanned out - complete
+                    console.log(`Employee already completed both scan in and scan out for ${activeShift.name}`);
+                    showWarning(`You have already completed both scan in and scan out for ${activeShift.name}.`);
+                    return;
+                }
+                
+                if (!shiftRecord.scanIn) {
+                    // This should never happen, but handle it gracefully
+                    console.error(`Record exists but no scan in time found for ${activeShift.name}`);
+                    showError('Scan out', 'Invalid record state. Please contact administrator.');
+                    return;
+                }
+                
+                // Record scan out time ONLY
+                console.log(`Recording SCAN OUT for ${activeShift.name} at ${currentTime}`);
+                shiftRecord.scanOut = currentTime;
+                
+                // DO NOT change scanIn time or status - they remain as originally recorded
+                console.log(`Scan out recorded. Final record:`, shiftRecord);
+                showSuccess(`Scan out recorded successfully for ${activeShift.name} at ${currentTime}`);
+                
+            } else {
+                // SCAN IN LOGIC - No existing record for this shift
+                console.log(`No existing record found for ${activeShift.name} - creating new scan in record`);
+                
+                const scanValidation = validateScanInTime(currentTime, activeShift);
+                console.log('Scan validation result:', scanValidation);
+                
+                if (!scanValidation.valid) {
+                    showError('Scan in', scanValidation.message);
+                    return;
+                }
+                
+                // Calculate status based on scan in time
+                const status = calculateScanInStatus(currentTime, activeShift);
+                console.log(`Calculated status: ${status}`);
+                
+                // Create new record with ONLY scan in data
+                const newRecord = {
+                    id: 'att_' + Date.now(),
+                    employee: currentUser.username,
+                    date: today,
+                    shift: activeShift.name,
+                    scanIn: currentTime,
+                    scanOut: null, // CRITICAL: Leave scan out empty until actual scan out
+                    status: status,
+                    note: ''
+                };
+                
+                console.log(`Creating new scan in record:`, newRecord);
+                attendanceData.push(newRecord);
+                showSuccess(`Scan in recorded successfully for ${activeShift.name} - Status: ${status}`);
+            }
+            
+            saveData();
+            updateMonthlyStatus();
+            updateScanButtonState();
+            
+            console.log(`=== ATTENDANCE RECORDING COMPLETE ===`);
+        }
+
+        function getTodayShift(employeeShifts) {
+            const today = new Date();
+            const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            const todayName = dayNames[today.getDay()];
+            
+            console.log(`Getting shift for ${todayName}, available shifts:`, employeeShifts);
+            
+            // Get all shifts that include today
+            const todayShifts = [];
+            for (let shift of employeeShifts) {
+                console.log(`Checking shift: ${shift.name}, working days: "${shift.workingDays}"`);
+                
+                // Check if workingDays is a string and contains today's name
+                if (typeof shift.workingDays === 'string' && shift.workingDays.includes(todayName)) {
+                    todayShifts.push(shift);
+                }
+                
+                // Check if workingDays is an array and contains today's name
+                if (Array.isArray(shift.workingDays) && shift.workingDays.includes(todayName)) {
+                    todayShifts.push(shift);
+                }
+            }
+            
+            console.log(`Found ${todayShifts.length} shifts for today:`, todayShifts);
+            
+            if (todayShifts.length === 0) {
+                console.log('No shift found for today');
+                return null;
+            }
+            
+            // If only one shift, return it
+            if (todayShifts.length === 1) {
+                console.log(`Single shift found: ${todayShifts[0].name} (${todayShifts[0].startTime} - ${todayShifts[0].endTime})`);
+                return todayShifts[0];
+            }
+            
+            // Multiple shifts - find the appropriate one based on current time
+            const now = new Date();
+            const currentTime = now.toTimeString().split(' ')[0].substring(0, 5);
+            const currentMinutes = timeToMinutes(currentTime);
+            
+            console.log(`Multiple shifts detected. Current time: ${currentTime} (${currentMinutes} minutes)`);
+            
+            // Find the shift whose scanning window is currently active
+            const activeShift = findActiveShiftForTime(todayShifts, currentMinutes);
+            
+            if (activeShift) {
+                console.log(`Active shift found: ${activeShift.name} (${activeShift.startTime} - ${activeShift.endTime})`);
+                return activeShift;
+            }
+            
+            console.log('No active shift found for current time');
+            return null;
+        }
+
+        function findActiveShiftForTime(shifts, currentMinutes) {
+            // Sort shifts by start time to handle them in chronological order
+            const sortedShifts = [...shifts].sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
+            
+            console.log('Checking shifts in chronological order:', sortedShifts.map(s => `${s.name} (${s.startTime}-${s.endTime})`));
+            
+            // Check each shift to see if current time falls within its scanning window
+            for (let shift of sortedShifts) {
+                const shiftStartMinutes = timeToMinutes(shift.startTime);
+                const shiftEndMinutes = timeToMinutes(shift.endTime);
+                const oneHourEarly = shiftStartMinutes - 60;
+                
+                console.log(`Checking ${shift.name}: window ${minutesToTime(oneHourEarly)} to ${shift.endTime} (${oneHourEarly} to ${shiftEndMinutes} minutes)`);
+                
+                // Check if current time is within this shift's scanning window
+                if (currentMinutes >= oneHourEarly && currentMinutes <= shiftEndMinutes) {
+                    console.log(`✓ Current time ${currentMinutes} is within ${shift.name} scanning window`);
+                    return shift;
+                }
+            }
+            
+            // Special case: Handle overlapping shifts (e.g., Shift A ends at 9:00, Shift B starts at 9:00)
+            // At exactly 9:00, prioritize the starting shift (Shift B) over the ending shift (Shift A)
+            for (let i = 0; i < sortedShifts.length - 1; i++) {
+                const currentShift = sortedShifts[i];
+                const nextShift = sortedShifts[i + 1];
+                
+                const currentEndMinutes = timeToMinutes(currentShift.endTime);
+                const nextStartMinutes = timeToMinutes(nextShift.startTime);
+                
+                // If shifts overlap or are adjacent, and current time is at the boundary
+                if (currentEndMinutes >= nextStartMinutes && currentMinutes === nextStartMinutes) {
+                    console.log(`⚡ Overlap detected at ${minutesToTime(currentMinutes)}: prioritizing next shift ${nextShift.name}`);
+                    return nextShift;
+                }
+            }
+            
+            return null;
+        }
+
+        function validateScanInTime(scanTime, shift) {
+            const scanMinutes = timeToMinutes(scanTime);
+            const shiftStartMinutes = timeToMinutes(shift.startTime);
+            const shiftEndMinutes = timeToMinutes(shift.endTime);
+            const oneHourEarly = shiftStartMinutes - 60;
+            
+            // Check if scan is too early (more than 1 hour before shift)
+            if (scanMinutes < oneHourEarly) {
+                const earliestTime = minutesToTime(oneHourEarly);
+                const shiftEndTime = shift.endTime;
+                return {
+                    valid: false,
+                    message: `Scanning is not allowed now. Please scan between ${earliestTime} and ${shiftEndTime}.`
+                };
+            }
+            
+            // Check if scan is too late (after shift ends)
+            if (scanMinutes > shiftEndMinutes) {
+                const earliestTime = minutesToTime(oneHourEarly);
+                const shiftEndTime = shift.endTime;
+                return {
+                    valid: false,
+                    message: `Scanning is not allowed now. Please scan between ${earliestTime} and ${shiftEndTime}.`
+                };
+            }
+            
+            return { valid: true };
+        }
+
+        function calculateScanInStatus(scanTime, shift) {
+            const scanMinutes = timeToMinutes(scanTime);
+            const shiftStartMinutes = timeToMinutes(shift.startTime);
+            
+            // On-time: From 1 hour before shift until exact shift start time
+            if (scanMinutes <= shiftStartMinutes) {
+                return 'On-time';
+            } else {
+                // Late: From 1 minute after shift start until shift end time
+                return 'Late';
+            }
+        }
+
+        function timeToMinutes(timeString) {
+            const [hours, minutes] = timeString.split(':').map(Number);
+            return hours * 60 + minutes;
+        }
+
+        function minutesToTime(minutes) {
+            const hours = Math.floor(minutes / 60);
+            const mins = minutes % 60;
+            return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+        }
+
+        function updateScanButtonState() {
+            const today = new Date().toISOString().split('T')[0];
+            const scanBtn = document.getElementById('startScanBtn');
+            
+            // Get employee's shifts for today
+            const employeeShifts = shifts[currentUser.username] || [];
+            const todayShifts = getAllTodayShifts(employeeShifts);
+            
+            // Get all existing records for today (could be multiple for multiple shifts)
+            const todayRecords = attendanceData.filter(record => 
+                record.employee === currentUser.username && record.date === today
+            );
+            
+            // Debug information
+            console.log(`=== SCAN BUTTON DEBUG for ${currentUser.username} ===`);
+            console.log(`Today: ${today}`);
+            console.log(`Employee shifts:`, employeeShifts);
+            console.log(`Today's shifts:`, todayShifts);
+            console.log(`Existing records:`, todayRecords);
+            
+            if (todayShifts.length === 0) {
+                console.log('No shifts assigned for today');
+                scanBtn.innerHTML = '❌ No Shift Assigned for Today';
+                scanBtn.className = 'w-full bg-red-500 text-white py-4 rounded-lg font-semibold cursor-not-allowed mb-4';
+                scanBtn.disabled = true;
+                return;
+            }
+            
+            const now = new Date();
+            const currentTime = now.toTimeString().split(' ')[0].substring(0, 5);
+            const currentMinutes = timeToMinutes(currentTime);
+            
+            // Find the active shift for current time
+            const activeShift = findActiveShiftForTime(todayShifts, currentMinutes);
+            
+            console.log(`Current time: ${currentTime} (${currentMinutes} minutes)`);
+            console.log(`Active shift:`, activeShift);
+            
+            if (!activeShift) {
+                // No active shift window - check if all shifts are completed
+                const allShiftsCompleted = checkAllShiftsCompleted(todayShifts, todayRecords);
+                
+                if (allShiftsCompleted) {
+                    console.log('All shifts completed for today');
+                    scanBtn.innerHTML = '✅ All Shifts Complete for Today';
+                    scanBtn.className = 'w-full bg-green-500 text-white py-4 rounded-lg font-semibold cursor-not-allowed mb-4';
+                    scanBtn.disabled = true;
+                } else {
+                    console.log('No active scanning window');
+                    scanBtn.innerHTML = '⏰ Scanning Not Available Now';
+                    scanBtn.className = 'w-full bg-gray-400 text-white py-4 rounded-lg font-semibold cursor-not-allowed mb-4';
+                    scanBtn.disabled = true;
+                }
+                return;
+            }
+            
+            // Check if there's already a record for this specific shift
+            const shiftRecord = todayRecords.find(record => record.shift === activeShift.name);
+            
+            if (!shiftRecord) {
+                // No scan in yet for this shift - allow scan in
+                console.log(`Allowing scan in for ${activeShift.name}`);
+                scanBtn.innerHTML = `📷 Scan In - Start ${activeShift.name}`;
+                scanBtn.className = 'w-full scanner-container text-white py-4 rounded-lg font-semibold hover:opacity-90 transition-all transform hover:scale-105 mb-4';
+                scanBtn.disabled = false;
+            } else if (!shiftRecord.scanOut) {
+                // Scanned in but not out for this shift - allow scan out
+                console.log(`Allowing scan out for ${activeShift.name}`);
+                scanBtn.innerHTML = `📷 Scan Out - End ${activeShift.name}`;
+                scanBtn.className = 'w-full bg-gradient-to-r from-orange-500 to-red-500 text-white py-4 rounded-lg font-semibold hover:opacity-90 transition-all transform hover:scale-105 mb-4';
+                scanBtn.disabled = false;
+            } else {
+                // This shift is complete - check if there are more shifts today
+                const incompleteShifts = findIncompleteShifts(todayShifts, todayRecords);
+                
+                if (incompleteShifts.length > 0) {
+                    console.log(`${activeShift.name} complete, but other shifts pending`);
+                    scanBtn.innerHTML = `✅ ${activeShift.name} Complete - Wait for Next Shift`;
+                    scanBtn.className = 'w-full bg-blue-500 text-white py-4 rounded-lg font-semibold cursor-not-allowed mb-4';
+                    scanBtn.disabled = true;
+                } else {
+                    console.log('All shifts completed for today');
+                    scanBtn.innerHTML = '✅ All Shifts Complete for Today';
+                    scanBtn.className = 'w-full bg-green-500 text-white py-4 rounded-lg font-semibold cursor-not-allowed mb-4';
+                    scanBtn.disabled = true;
+                }
+            }
+        }
+
+        function getAllTodayShifts(employeeShifts) {
+            const today = new Date();
+            const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            const todayName = dayNames[today.getDay()];
+            
+            const todayShifts = [];
+            for (let shift of employeeShifts) {
+                // Check if workingDays is a string and contains today's name
+                if (typeof shift.workingDays === 'string' && shift.workingDays.includes(todayName)) {
+                    todayShifts.push(shift);
+                }
+                
+                // Check if workingDays is an array and contains today's name
+                if (Array.isArray(shift.workingDays) && shift.workingDays.includes(todayName)) {
+                    todayShifts.push(shift);
+                }
+            }
+            
+            // Sort by start time
+            return todayShifts.sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
+        }
+
+        function checkAllShiftsCompleted(todayShifts, todayRecords) {
+            for (let shift of todayShifts) {
+                const shiftRecord = todayRecords.find(record => record.shift === shift.name);
+                if (!shiftRecord || !shiftRecord.scanOut) {
+                    return false; // This shift is not completed
+                }
+            }
+            return true; // All shifts are completed
+        }
+
+        function findIncompleteShifts(todayShifts, todayRecords) {
+            return todayShifts.filter(shift => {
+                const shiftRecord = todayRecords.find(record => record.shift === shift.name);
+                return !shiftRecord || !shiftRecord.scanOut;
+            });
+        }
+
+        // Admin functions
+        function populateEmployeeSelects() {
+            const selects = ['filterEmployee', 'manageEmpSelect', 'shiftEmpSelect', 'manualEmpSelect'];
+            
+            selects.forEach(selectId => {
+                const select = document.getElementById(selectId);
+                if (select) {
+                    select.innerHTML = selectId === 'filterEmployee' ? '<option value="">All Employees</option>' : '<option value="">Select Employee</option>';
+                    
+                    employees.forEach(emp => {
+                        const option = document.createElement('option');
+                        option.value = emp.username;
+                        option.textContent = emp.username;
+                        select.appendChild(option);
+                    });
+                }
+            });
+            
+            // Populate admin select dropdown (excluding the protected 'ann' account)
+            const adminSelect = document.getElementById('manageAdminSelect');
+            if (adminSelect) {
+                adminSelect.innerHTML = '<option value="">Select Admin</option>';
+                
+                admins.forEach(admin => {
+                    // Exclude the protected 'ann' account from the dropdown
+                    if (admin.username !== 'ann') {
+                        const option = document.createElement('option');
+                        option.value = admin.username;
+                        option.textContent = admin.username;
+                        adminSelect.appendChild(option);
+                    }
+                });
+            }
+        }
+
+        // Dedicated function for manual entry employee dropdown
+        function populateManualEntryEmployeeSelect() {
+            const select = document.getElementById('manualEmpSelect');
+            if (!select) return;
+            
+            // Clear existing options
+            select.innerHTML = '<option value="">Select Employee</option>';
+            
+            // Add all employees to the dropdown
+            employees.forEach(emp => {
+                const option = document.createElement('option');
+                option.value = emp.username;
+                option.textContent = emp.username;
+                select.appendChild(option);
+            });
+        }
+
+        function createEmployee() {
+            requireAdminAccess(() => {
+                const username = document.getElementById('newEmpUsername').value;
+                const password = document.getElementById('newEmpPassword').value;
+                const confirmPassword = document.getElementById('newEmpConfirmPassword').value;
+                
+                if (!username || !password || !confirmPassword) {
+                    showError('Employee creation', 'Please fill in all fields.');
+                    return;
+                }
+                
+                if (password !== confirmPassword) {
+                    showError('Employee creation', 'Passwords do not match.');
+                    return;
+                }
+                
+                if (employees.find(emp => emp.username === username) || admins.find(admin => admin.username === username)) {
+                    showError('Employee creation', 'Username already exists.');
+                    return;
+                }
+                
+                const newEmployee = {
+                    id: 'emp_' + Date.now(),
+                    username: username,
+                    password: password
+                };
+                
+                employees.push(newEmployee);
+                saveData();
+                populateEmployeeSelects();
+                populateManualEntryEmployeeSelect();
+                
+                // Clear form
+                document.getElementById('newEmpUsername').value = '';
+                document.getElementById('newEmpPassword').value = '';
+                document.getElementById('newEmpConfirmPassword').value = '';
+                
+                showSuccess(`Employee '${username}' created`);
+            });
+        }
+
+        function createAdmin() {
+            requireAdminAccess(() => {
+                const username = document.getElementById('newAdminUsername').value;
+                const password = document.getElementById('newAdminPassword').value;
+                const confirmPassword = document.getElementById('newAdminConfirmPassword').value;
+                
+                if (!username || !password || !confirmPassword) {
+                    showError('Admin creation', 'Please fill in all fields.');
+                    return;
+                }
+                
+                if (password !== confirmPassword) {
+                    showError('Admin creation', 'Passwords do not match.');
+                    return;
+                }
+                
+                if (employees.find(emp => emp.username === username) || admins.find(admin => admin.username === username)) {
+                    showError('Admin creation', 'Username already exists.');
+                    return;
+                }
+                
+                const newAdmin = {
+                    id: 'admin_' + Date.now(),
+                    username: username,
+                    password: password
+                };
+                
+                admins.push(newAdmin);
+                saveData();
+                
+                // Clear form
+                document.getElementById('newAdminUsername').value = '';
+                document.getElementById('newAdminPassword').value = '';
+                document.getElementById('newAdminConfirmPassword').value = '';
+                
+                showSuccess(`Admin '${username}' created`);
+            });
+        }
+
+        function updateEmployee() {
+            const selectedUsername = document.getElementById('manageEmpSelect').value;
+            const newUsername = document.getElementById('manageEmpUsername').value;
+            const newPassword = document.getElementById('manageEmpPassword').value;
+            
+            if (!selectedUsername) {
+                showError('Employee update', 'Please select an employee.');
+                return;
+            }
+            
+            const employee = employees.find(emp => emp.username === selectedUsername);
+            if (!employee) {
+                showError('Employee update', 'Employee not found.');
+                return;
+            }
+            
+            if (newUsername) {
+                if (employees.find(emp => emp.username === newUsername && emp.id !== employee.id) || 
+                    admins.find(admin => admin.username === newUsername)) {
+                    showError('Employee update', 'Username already exists.');
+                    return;
+                }
+                employee.username = newUsername;
+            }
+            
+            if (newPassword) {
+                employee.password = newPassword;
+            }
+            
+            saveData();
+            populateEmployeeSelects();
+            
+            // Clear form
+            document.getElementById('manageEmpSelect').value = '';
+            document.getElementById('manageEmpUsername').value = '';
+            document.getElementById('manageEmpPassword').value = '';
+            
+            showSuccess(`Employee '${selectedUsername}' updated`);
+        }
+
+        function removeEmployee() {
+            const selectedUsername = document.getElementById('manageEmpSelect').value;
+            
+            if (!selectedUsername) {
+                showError('Employee removal', 'Please select an employee.');
+                return;
+            }
+            
+            if (confirm(`Are you sure you want to remove employee "${selectedUsername}"?`)) {
+                employees = employees.filter(emp => emp.username !== selectedUsername);
+                
+                // Also remove their attendance records
+                attendanceData = attendanceData.filter(record => record.employee !== selectedUsername);
+                
+                saveData();
+                populateEmployeeSelects();
+                loadAttendanceTable();
+                
+                // Clear form
+                document.getElementById('manageEmpSelect').value = '';
+                document.getElementById('manageEmpUsername').value = '';
+                document.getElementById('manageEmpPassword').value = '';
+                
+                showSuccess(`Employee '${selectedUsername}' removed`);
+            }
+        }
+
+        function updateAdmin() {
+            const selectedUsername = document.getElementById('manageAdminSelect').value;
+            const newUsername = document.getElementById('manageAdminUsername').value;
+            const newPassword = document.getElementById('manageAdminPassword').value;
+            
+            if (!selectedUsername) {
+                showError('Admin update', 'Please select an admin.');
+                return;
+            }
+            
+            // Double-check that we're not trying to modify the protected 'ann' account
+            if (selectedUsername === 'ann') {
+                showError('Admin update', 'The default admin account cannot be modified.');
+                return;
+            }
+            
+            const admin = admins.find(adm => adm.username === selectedUsername);
+            if (!admin) {
+                showError('Admin update', 'Admin not found.');
+                return;
+            }
+            
+            if (newUsername) {
+                if (employees.find(emp => emp.username === newUsername) || 
+                    admins.find(adm => adm.username === newUsername && adm.id !== admin.id)) {
+                    showError('Admin update', 'Username already exists.');
+                    return;
+                }
+                admin.username = newUsername;
+            }
+            
+            if (newPassword) {
+                admin.password = newPassword;
+            }
+            
+            saveData();
+            populateEmployeeSelects();
+            
+            // Clear form
+            document.getElementById('manageAdminSelect').value = '';
+            document.getElementById('manageAdminUsername').value = '';
+            document.getElementById('manageAdminPassword').value = '';
+            
+            showSuccess(`Admin '${selectedUsername}' updated`);
+        }
+
+        function removeAdmin() {
+            const selectedUsername = document.getElementById('manageAdminSelect').value;
+            
+            if (!selectedUsername) {
+                showError('Admin removal', 'Please select an admin.');
+                return;
+            }
+            
+            // Double-check that we're not trying to remove the protected 'ann' account
+            if (selectedUsername === 'ann') {
+                showError('Admin removal', 'The default admin account cannot be removed.');
+                return;
+            }
+            
+            if (confirm(`Are you sure you want to remove admin "${selectedUsername}"?`)) {
+                admins = admins.filter(adm => adm.username !== selectedUsername);
+                
+                saveData();
+                populateEmployeeSelects();
+                
+                // Clear form
+                document.getElementById('manageAdminSelect').value = '';
+                document.getElementById('manageAdminUsername').value = '';
+                document.getElementById('manageAdminPassword').value = '';
+                
+                showSuccess(`Admin '${selectedUsername}' removed`);
+            }
+        }
+
+        // New shift management functions
+        let currentSelectedEmployee = null;
+        let currentEditingShift = null;
+
+        function populateShiftEmployeeSelect() {
+            const select = document.getElementById('shiftEmployeeSelect');
+            select.innerHTML = '<option value="">Choose an employee to manage their shifts</option>';
+            
+            employees.forEach((emp, index) => {
+                const option = document.createElement('option');
+                option.value = emp.username;
+                option.textContent = `${emp.username} (EMP${String(index + 1).padStart(3, '0')})`;
+                select.appendChild(option);
+            });
+        }
+
+        function resetShiftManagementPage() {
+            currentSelectedEmployee = null;
+            document.getElementById('employeeShiftsSection').classList.add('hidden');
+            document.getElementById('addShiftFormSection').classList.add('hidden');
+            document.getElementById('editShiftFormSection').classList.add('hidden');
+        }
+
+        function loadEmployeeShifts() {
+            const selectedEmployee = document.getElementById('shiftEmployeeSelect').value;
+            
+            if (!selectedEmployee) {
+                resetShiftManagementPage();
+                return;
+            }
+            
+            currentSelectedEmployee = selectedEmployee;
+            
+            // Show the shifts section
+            document.getElementById('employeeShiftsSection').classList.remove('hidden');
+            
+            // Update the title
+            const employeeIndex = employees.findIndex(emp => emp.username === selectedEmployee);
+            const employeeId = `EMP${String(employeeIndex + 1).padStart(3, '0')}`;
+            document.getElementById('currentShiftsTitle').textContent = `Current Shifts for ${selectedEmployee} (${employeeId})`;
+            
+            // Load shifts for this employee
+            loadEmployeeShiftsList();
+        }
+
+        function loadEmployeeShiftsList() {
+            const shiftsList = document.getElementById('employeeShiftsList');
+            shiftsList.innerHTML = '';
+            
+            const employeeShifts = shifts[currentSelectedEmployee] || [];
+            
+            if (employeeShifts.length === 0) {
+                shiftsList.innerHTML = '<div class="text-gray-500 text-center py-8">No shifts assigned to this employee yet.</div>';
+                return;
+            }
+            
+            employeeShifts.forEach(shift => {
+                const shiftDiv = document.createElement('div');
+                shiftDiv.className = 'bg-gray-50 p-6 rounded-lg border border-gray-200';
+                shiftDiv.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="text-lg font-semibold text-gray-800 mb-2">${shift.name}</h4>
+                            <p class="text-gray-600 mb-1"><strong>Time:</strong> ${shift.startTime} - ${shift.endTime}</p>
+                            <p class="text-gray-600"><strong>Days:</strong> ${shift.workingDays}</p>
+                        </div>
+                        <div class="flex space-x-2">
+                            <button onclick="editShift('${shift.id}')" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm transition-colors">
+                                Edit
+                            </button>
+                            <button onclick="deleteEmployeeShift('${shift.id}')" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm transition-colors">
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                `;
+                shiftsList.appendChild(shiftDiv);
+            });
+        }
+
+        function showAddShiftForm() {
+            document.getElementById('addShiftFormSection').classList.remove('hidden');
+            document.getElementById('editShiftFormSection').classList.add('hidden');
+            clearShiftForm();
+        }
+
+        function cancelAddShift() {
+            document.getElementById('addShiftFormSection').classList.add('hidden');
+            clearShiftForm();
+        }
+
+        function clearShiftForm() {
+            document.getElementById('shiftName').value = '';
+            document.getElementById('shiftStart').value = '';
+            document.getElementById('shiftEnd').value = '';
+            
+            // Clear all day checkboxes
+            const dayCheckboxes = ['dayMon', 'dayTue', 'dayWed', 'dayThu', 'dayFri', 'daySat', 'daySun'];
+            dayCheckboxes.forEach(id => {
+                document.getElementById(id).checked = false;
+            });
+        }
+
+        function getSelectedWorkingDays() {
+            const dayMapping = {
+                'dayMon': 'Monday',
+                'dayTue': 'Tuesday', 
+                'dayWed': 'Wednesday',
+                'dayThu': 'Thursday',
+                'dayFri': 'Friday',
+                'daySat': 'Saturday',
+                'daySun': 'Sunday'
+            };
+            
+            const selectedDays = [];
+            Object.keys(dayMapping).forEach(id => {
+                if (document.getElementById(id).checked) {
+                    selectedDays.push(dayMapping[id]);
+                }
+            });
+            
+            return selectedDays.join(', ');
+        }
+
+        function saveNewShift() {
+            const shiftName = document.getElementById('shiftName').value;
+            const shiftStart = document.getElementById('shiftStart').value;
+            const shiftEnd = document.getElementById('shiftEnd').value;
+            const workingDays = getSelectedWorkingDays();
+            
+            if (!shiftName || !shiftStart || !shiftEnd || !workingDays) {
+                showError('Shift creation', 'Please fill in all fields and select at least one working day.');
+                return;
+            }
+            
+            if (!shifts[currentSelectedEmployee]) {
+                shifts[currentSelectedEmployee] = [];
+            }
+            
+            const newShift = {
+                id: 'shift_' + Date.now(),
+                name: shiftName,
+                startTime: shiftStart,
+                endTime: shiftEnd,
+                workingDays: workingDays
+            };
+            
+            shifts[currentSelectedEmployee].push(newShift);
+            saveData();
+            
+            // Clear form and hide it
+            cancelAddShift();
+            loadEmployeeShiftsList();
+            
+            showSuccess(`Shift '${shiftName}' created for ${currentSelectedEmployee}`);
+        }
+
+        function editShift(shiftId) {
+            const employeeShifts = shifts[currentSelectedEmployee] || [];
+            const shift = employeeShifts.find(s => s.id === shiftId);
+            
+            if (!shift) {
+                alert('Shift not found');
+                return;
+            }
+            
+            currentEditingShift = shift;
+            
+            // Hide add form and show edit form
+            document.getElementById('addShiftFormSection').classList.add('hidden');
+            document.getElementById('editShiftFormSection').classList.remove('hidden');
+            
+            // Populate edit form
+            document.getElementById('editShiftName').value = shift.name;
+            document.getElementById('editShiftStart').value = shift.startTime;
+            document.getElementById('editShiftEnd').value = shift.endTime;
+            
+            // Set working days checkboxes
+            const dayMapping = {
+                'Monday': 'editDayMon',
+                'Tuesday': 'editDayTue',
+                'Wednesday': 'editDayWed',
+                'Thursday': 'editDayThu',
+                'Friday': 'editDayFri',
+                'Saturday': 'editDaySat',
+                'Sunday': 'editDaySun'
+            };
+            
+            // Clear all checkboxes first
+            Object.values(dayMapping).forEach(id => {
+                document.getElementById(id).checked = false;
+            });
+            
+            // Set checked days
+            const workingDays = shift.workingDays.split(', ');
+            workingDays.forEach(day => {
+                const checkboxId = dayMapping[day];
+                if (checkboxId) {
+                    document.getElementById(checkboxId).checked = true;
+                }
+            });
+        }
+
+        function getSelectedEditWorkingDays() {
+            const dayMapping = {
+                'editDayMon': 'Monday',
+                'editDayTue': 'Tuesday', 
+                'editDayWed': 'Wednesday',
+                'editDayThu': 'Thursday',
+                'editDayFri': 'Friday',
+                'editDaySat': 'Saturday',
+                'editDaySun': 'Sunday'
+            };
+            
+            const selectedDays = [];
+            Object.keys(dayMapping).forEach(id => {
+                if (document.getElementById(id).checked) {
+                    selectedDays.push(dayMapping[id]);
+                }
+            });
+            
+            return selectedDays.join(', ');
+        }
+
+        function updateShift() {
+            const shiftName = document.getElementById('editShiftName').value;
+            const shiftStart = document.getElementById('editShiftStart').value;
+            const shiftEnd = document.getElementById('editShiftEnd').value;
+            const workingDays = getSelectedEditWorkingDays();
+            
+            if (!shiftName || !shiftStart || !shiftEnd || !workingDays) {
+                showError('Shift update', 'Please fill in all fields and select at least one working day.');
+                return;
+            }
+            
+            // Update the shift
+            const oldShiftName = currentEditingShift.name;
+            currentEditingShift.name = shiftName;
+            currentEditingShift.startTime = shiftStart;
+            currentEditingShift.endTime = shiftEnd;
+            currentEditingShift.workingDays = workingDays;
+            
+            saveData();
+            
+            // Hide edit form and refresh list
+            cancelEditShift();
+            loadEmployeeShiftsList();
+            
+            showSuccess(`Shift '${oldShiftName}' updated`);
+        }
+
+        function cancelEditShift() {
+            document.getElementById('editShiftFormSection').classList.add('hidden');
+            currentEditingShift = null;
+        }
+
+        function deleteEmployeeShift(shiftId) {
+            const shift = shifts[currentSelectedEmployee].find(s => s.id === shiftId);
+            const shiftName = shift ? shift.name : 'shift';
+            
+            if (confirm('Are you sure you want to delete this shift?')) {
+                shifts[currentSelectedEmployee] = shifts[currentSelectedEmployee].filter(shift => shift.id !== shiftId);
+                
+                // Remove employee from shifts object if no shifts left
+                if (shifts[currentSelectedEmployee].length === 0) {
+                    delete shifts[currentSelectedEmployee];
+                }
+                
+                saveData();
+                loadEmployeeShiftsList();
+                showSuccess(`Shift '${shiftName}' deleted`);
+            }
+        }
+
+        // Legacy functions for backward compatibility
+        function loadExistingShifts() {
+            // This function is no longer used in the new design
+        }
+
+        function deleteShift(employee, shiftId) {
+            // This function is no longer used in the new design
+        }
+
+        function manageShift() {
+            // This function is no longer used in the new design
+        }
+
+        function addManualEntry() {
+            const selectedEmployee = document.getElementById('manualEmpSelect').value;
+            const date = document.getElementById('manualDate').value;
+            const scanIn = document.getElementById('manualScanIn').value;
+            const scanOut = document.getElementById('manualScanOut').value;
+            const note = document.getElementById('manualNote').value;
+            
+            if (!selectedEmployee || !date || !scanIn) {
+                showError('Manual entry', 'Please fill in required fields (Employee, Date, Scan In).');
+                return;
+            }
+            
+            // Check if record already exists
+            const existingRecord = attendanceData.find(record => 
+                record.employee === selectedEmployee && record.date === date
+            );
+            
+            if (existingRecord) {
+                showError('Manual entry', 'Attendance record already exists for this employee on this date.');
+                return;
+            }
+            
+            // Get employee's shift for the date to calculate proper status
+            const employeeShifts = shifts[selectedEmployee] || [];
+            const dateObj = new Date(date);
+            const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            const dayName = dayNames[dateObj.getDay()];
+            
+            // Find appropriate shift for this day
+            let shiftForDay = null;
+            for (let shift of employeeShifts) {
+                if (shift.workingDays.includes(dayName)) {
+                    shiftForDay = shift;
+                    break;
+                }
+            }
+            
+            // Default shift if none found
+            if (!shiftForDay) {
+                shiftForDay = {
+                    name: 'Default Shift',
+                    startTime: '09:00',
+                    endTime: '17:00'
+                };
+            }
+            
+            const newRecord = {
+                id: 'att_' + Date.now(),
+                employee: selectedEmployee,
+                date: date,
+                shift: shiftForDay.name,
+                scanIn: scanIn,
+                scanOut: scanOut || null,
+                status: calculateScanInStatus(scanIn, shiftForDay),
+                note: note || 'Manual entry by admin'
+            };
+            
+            attendanceData.push(newRecord);
+            saveData();
+            loadAttendanceTable();
+            
+            // Clear form
+            document.getElementById('manualEmpSelect').value = '';
+            document.getElementById('manualDate').value = '';
+            document.getElementById('manualScanIn').value = '';
+            document.getElementById('manualScanOut').value = '';
+            document.getElementById('manualNote').value = '';
+            
+            showSuccess(`Manual entry added for ${selectedEmployee} on ${date}`);
+        }
+
+        function applyFilter() {
+            requireAdminAccess(() => {
+                const startDate = document.getElementById('filterStartDate').value;
+                const endDate = document.getElementById('filterEndDate').value;
+                const employee = document.getElementById('filterEmployee').value;
+                const status = document.getElementById('filterStatus').value;
+                
+                let filteredData = [...attendanceData];
+                
+                if (startDate) {
+                    filteredData = filteredData.filter(record => record.date >= startDate);
+                }
+                
+                if (endDate) {
+                    filteredData = filteredData.filter(record => record.date <= endDate);
+                }
+                
+                if (employee) {
+                    filteredData = filteredData.filter(record => record.employee === employee);
+                }
+                
+                if (status) {
+                    filteredData = filteredData.filter(record => record.status === status);
+                }
+                
+                // Store filtered data for export
+                currentFilteredData = filteredData;
+                
+                loadAttendanceTable(filteredData);
+                showSuccess(`Filter applied - Found ${filteredData.length} records`);
+            });
+        }
+
+        function clearFilter() {
+            requireAdminAccess(() => {
+                document.getElementById('filterStartDate').value = '';
+                document.getElementById('filterEndDate').value = '';
+                document.getElementById('filterEmployee').value = '';
+                document.getElementById('filterStatus').value = '';
+                
+                // Reset filtered data to show all records
+                currentFilteredData = [...attendanceData];
+                
+                loadAttendanceTable();
+                showSuccess('Filter cleared');
+            });
+        }
+
+        function loadAttendanceTable(data = null) {
+            const tbody = document.getElementById('attendanceTableBody');
+            tbody.innerHTML = '';
+            
+            // CRITICAL: Use provided data or fall back to currentFilteredData
+            // This ensures the table always shows what's in currentFilteredData
+            const dataToDisplay = data || currentFilteredData || attendanceData;
+            
+            // Sort by date (newest first)
+            const sortedData = [...dataToDisplay].sort((a, b) => new Date(b.date) - new Date(a.date));
+            
+            // CRITICAL: Only update currentFilteredData if we're not already using it
+            // This prevents circular updates and ensures consistency
+            if (data !== null) {
+                currentFilteredData = sortedData;
+            }
+            
+            sortedData.forEach(record => {
+                const row = document.createElement('tr');
+                row.className = 'border-b hover:bg-gray-50';
+                
+                const statusColor = record.status === 'On-time' ? 'text-green-600' : 
+                                  record.status === 'Late' ? 'text-yellow-600' : 'text-red-600';
+                
+                row.innerHTML = `
+                    <td class="px-4 py-3">${record.employee}</td>
+                    <td class="px-4 py-3">${record.date}</td>
+                    <td class="px-4 py-3">${record.shift}</td>
+                    <td class="px-4 py-3">${record.scanIn || '-'}</td>
+                    <td class="px-4 py-3">${record.scanOut || '-'}</td>
+                    <td class="px-4 py-3 ${statusColor} font-semibold">${record.status}</td>
+                    <td class="px-4 py-3">${record.note || '-'}</td>
+                    <td class="px-4 py-3">
+                        <button onclick="editAttendanceRecord('${record.id}')" class="text-blue-600 hover:text-blue-800 text-sm mr-3">
+                            Edit
+                        </button>
+                        <button onclick="deleteAttendanceRecord('${record.id}')" class="text-red-600 hover:text-red-800 text-sm">
+                            Delete
+                        </button>
+                    </td>
+                `;
+                
+                tbody.appendChild(row);
+            });
+        }
+
+        function editAttendanceRecord(recordId) {
+            const record = attendanceData.find(r => r.id === recordId);
+            if (!record) {
+                showError('Edit attendance', 'Record not found.');
+                return;
+            }
+            
+            currentEditingAttendance = record;
+            
+            // Populate employee dropdown in modal
+            const employeeSelect = document.getElementById('editAttEmployee');
+            employeeSelect.innerHTML = '<option value="">Select Employee</option>';
+            employees.forEach(emp => {
+                const option = document.createElement('option');
+                option.value = emp.username;
+                option.textContent = emp.username;
+                if (emp.username === record.employee) {
+                    option.selected = true;
+                }
+                employeeSelect.appendChild(option);
+            });
+            
+            // Pre-fill form with current record data
+            document.getElementById('editAttDate').value = record.date;
+            document.getElementById('editAttShift').value = record.shift;
+            document.getElementById('editAttScanIn').value = record.scanIn || '';
+            document.getElementById('editAttScanOut').value = record.scanOut || '';
+            document.getElementById('editAttStatus').value = record.status;
+            document.getElementById('editAttNote').value = record.note || '';
+            
+            // Show modal
+            document.getElementById('editAttendanceModal').classList.remove('hidden');
+        }
+
+        function saveAttendanceEdit() {
+            if (!currentEditingAttendance) {
+                showError('Save attendance', 'No record selected for editing.');
+                return;
+            }
+            
+            const employee = document.getElementById('editAttEmployee').value;
+            const date = document.getElementById('editAttDate').value;
+            const shift = document.getElementById('editAttShift').value;
+            const scanIn = document.getElementById('editAttScanIn').value;
+            const scanOut = document.getElementById('editAttScanOut').value;
+            const status = document.getElementById('editAttStatus').value;
+            const note = document.getElementById('editAttNote').value;
+            
+            if (!employee || !date || !shift || !status) {
+                showError('Save attendance', 'Please fill in all required fields.');
+                return;
+            }
+            
+            // Check if changing to a different employee/date combination that already exists
+            if ((employee !== currentEditingAttendance.employee || date !== currentEditingAttendance.date)) {
+                const existingRecord = attendanceData.find(record => 
+                    record.employee === employee && 
+                    record.date === date && 
+                    record.id !== currentEditingAttendance.id
+                );
+                
+                if (existingRecord) {
+                    showError('Save attendance', 'An attendance record already exists for this employee on this date.');
+                    return;
+                }
+            }
+            
+            // Update the record
+            const oldEmployeeName = currentEditingAttendance.employee;
+            const oldDate = currentEditingAttendance.date;
+            
+            currentEditingAttendance.employee = employee;
+            currentEditingAttendance.date = date;
+            currentEditingAttendance.shift = shift;
+            currentEditingAttendance.scanIn = scanIn || null;
+            currentEditingAttendance.scanOut = scanOut || null;
+            currentEditingAttendance.status = status;
+            currentEditingAttendance.note = note;
+            
+            saveData();
+            loadAttendanceTable();
+            cancelAttendanceEdit();
+            
+            showSuccess(`Attendance record for ${oldEmployeeName} on ${oldDate} updated`);
+        }
+
+        function cancelAttendanceEdit() {
+            currentEditingAttendance = null;
+            document.getElementById('editAttendanceModal').classList.add('hidden');
+            
+            // Clear form
+            document.getElementById('editAttEmployee').value = '';
+            document.getElementById('editAttDate').value = '';
+            document.getElementById('editAttShift').value = '';
+            document.getElementById('editAttScanIn').value = '';
+            document.getElementById('editAttScanOut').value = '';
+            document.getElementById('editAttStatus').value = 'On-time';
+            document.getElementById('editAttNote').value = '';
+        }
+
+        function deleteAttendanceRecord(recordId) {
+            console.log('Delete button clicked for record ID:', recordId);
+            
+            const record = attendanceData.find(r => r.id === recordId);
+            if (!record) {
+                showError('Delete attendance', 'Record not found.');
+                return;
+            }
+            
+            const recordInfo = `${record.employee} on ${record.date}`;
+            
+            // Show confirmation dialog with detailed message
+            const confirmMessage = `Are you sure you want to delete this attendance record?\n\nEmployee: ${record.employee}\nDate: ${record.date}\nShift: ${record.shift}\nStatus: ${record.status}\n\nThis action cannot be undone.`;
+            
+            if (confirm(confirmMessage)) {
+                console.log('User confirmed deletion, removing record:', recordId);
+                
+                // Remove the record from attendanceData
+                const originalLength = attendanceData.length;
+                attendanceData = attendanceData.filter(r => r.id !== recordId);
+                
+                if (attendanceData.length < originalLength) {
+                    // Record was successfully removed
+                    console.log('Record removed from attendanceData');
+                    
+                    // Also remove from currentFilteredData if it exists there
+                    if (currentFilteredData && currentFilteredData.length > 0) {
+                        currentFilteredData = currentFilteredData.filter(r => r.id !== recordId);
+                        console.log('Record also removed from currentFilteredData');
+                    }
+                    
+                    // Save data and refresh table
+                    saveData();
+                    loadAttendanceTable();
+                    
+                    // Update employee monthly status if they're viewing their dashboard
+                    if (!isAdmin && currentUser && currentUser.username === record.employee) {
+                        updateMonthlyStatus();
+                    }
+                    
+                    showSuccess(`Attendance record for ${recordInfo} deleted successfully`);
+                    console.log('Delete operation completed successfully');
+                } else {
+                    // Record was not found or not removed
+                    console.error('Failed to remove record from attendanceData');
+                    showError('Delete attendance', 'Failed to delete the record. Please try again.');
+                }
+            } else {
+                console.log('User cancelled deletion');
+            }
+        }
+
+        function exportToExcel() {
+            requireAdminAccess(() => {
+                // CRITICAL FIX: Always use currentFilteredData which contains exactly what's visible in the table
+                const dataToExport = currentFilteredData;
+                
+                if (!dataToExport || dataToExport.length === 0) {
+                    showError('Data export', 'No data to export. The table is empty or no records match your current filters.');
+                    return;
+                }
+                
+                try {
+                    // Prepare data for export (only the visible/filtered records)
+                    const exportData = dataToExport.map(record => ({
+                        Employee: record.employee,
+                        Date: record.date,
+                        Shift: record.shift,
+                        'Scan In': record.scanIn || '',
+                        'Scan Out': record.scanOut || '',
+                        Status: record.status,
+                        Note: record.note || ''
+                    }));
+                    
+                    // Create workbook and worksheet
+                    const wb = XLSX.utils.book_new();
+                    const ws = XLSX.utils.json_to_sheet(exportData);
+                    
+                    // Add worksheet to workbook
+                    XLSX.utils.book_append_sheet(wb, ws, 'Attendance Records');
+                    
+                    // Generate filename with current date and filter info
+                    const now = new Date();
+                    const dateStr = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
+                    
+                    // Determine if filters are active by checking applied filter values
+                    const startDate = document.getElementById('filterStartDate').value;
+                    const endDate = document.getElementById('filterEndDate').value;
+                    const employee = document.getElementById('filterEmployee').value;
+                    const status = document.getElementById('filterStatus').value;
+                    const hasActiveFilters = startDate || endDate || employee || status;
+                    
+                    const filterSuffix = hasActiveFilters ? '_filtered' : '';
+                    const filename = `attendance_records_${dateStr}${filterSuffix}.xlsx`;
+                    
+                    // Save file
+                    XLSX.writeFile(wb, filename);
+                    
+                    const recordCount = dataToExport.length;
+                    const totalRecords = attendanceData.length;
+                    
+                    let exportMessage;
+                    if (hasActiveFilters) {
+                        exportMessage = `Filtered data exported: ${recordCount} of ${totalRecords} records saved to ${filename}`;
+                    } else {
+                        exportMessage = `All data exported: ${recordCount} records saved to ${filename}`;
+                    }
+                    
+                    showSuccess(exportMessage);
+                } catch (error) {
+                    console.error('Export error:', error);
+                    showError('Data export', 'Failed to export data. Please try again.');
+                }
+            });
+        }
+
+        function updateQRCodeText() {
+            requireAdminAccess(() => {
+                const newText = document.getElementById('qrCodeText').value.trim();
+                
+                if (!newText) {
+                    showError('QR Code update', 'QR Code text cannot be empty.');
+                    return;
+                }
+                
+                qrCodeRequiredText = newText;
+                localStorage.setItem('qrCodeRequiredText', qrCodeRequiredText);
+                
+                showSuccess('QR Code text updated');
+            });
+        }
+
+        function logout() {
+            localStorage.removeItem('userSession');
+            const userName = currentUser ? currentUser.username : 'User';
+            currentUser = null;
+            isAdmin = false;
+            
+            // Stop QR scanner if running
+            if (html5QrCode) {
+                stopQRScanner();
+            }
+            
+            // CRITICAL FIX: Hide ALL pages including admin feature pages
+            hideAllPages();
+            
+            // Show ONLY the main login screen
+            document.getElementById('loginScreen').classList.remove('hidden');
+            
+            // Clear ALL login forms
+            document.getElementById('username').value = '';
+            document.getElementById('password').value = '';
+            document.getElementById('adminUsername').value = '';
+            document.getElementById('adminPassword').value = '';
+            
+            // Clear any form data from admin pages
+            clearAllFormData();
+            
+            showSuccess(`${userName} logged out successfully`);
+        }
+
+        // Helper function to clear all form data across the application
+        function clearAllFormData() {
+            // Clear employee creation forms
+            const empForms = ['newEmpUsername', 'newEmpPassword', 'newEmpConfirmPassword', 
+                             'createEmpUsername', 'createEmpPassword', 'createEmpConfirmPassword'];
+            empForms.forEach(id => {
+                const element = document.getElementById(id);
+                if (element) element.value = '';
+            });
+            
+            // Clear admin creation forms
+            const adminForms = ['newAdminUsername', 'newAdminPassword', 'newAdminConfirmPassword',
+                               'createAdminUsername', 'createAdminPassword', 'createAdminConfirmPassword'];
+            adminForms.forEach(id => {
+                const element = document.getElementById(id);
+                if (element) element.value = '';
+            });
+            
+            // Clear management forms
+            const manageForms = ['manageEmpSelect', 'manageEmpUsername', 'manageEmpPassword',
+                                'manageAdminSelect', 'manageAdminUsername', 'manageAdminPassword'];
+            manageForms.forEach(id => {
+                const element = document.getElementById(id);
+                if (element) element.value = '';
+            });
+            
+            // Clear shift management forms
+            const shiftForms = ['shiftEmployeeSelect', 'shiftName', 'shiftStart', 'shiftEnd',
+                               'editShiftName', 'editShiftStart', 'editShiftEnd'];
+            shiftForms.forEach(id => {
+                const element = document.getElementById(id);
+                if (element) element.value = '';
+            });
+            
+            // Clear manual entry forms
+            const manualForms = ['manualEmpSelect', 'manualDate', 'manualScanIn', 'manualScanOut', 'manualNote'];
+            manualForms.forEach(id => {
+                const element = document.getElementById(id);
+                if (element) element.value = '';
+            });
+            
+            // Clear filter forms
+            const filterForms = ['filterStartDate', 'filterEndDate', 'filterEmployee', 'filterStatus'];
+            filterForms.forEach(id => {
+                const element = document.getElementById(id);
+                if (element) element.value = '';
+            });
+            
+            // Reset shift management page state
+            currentSelectedEmployee = null;
+            currentEditingShift = null;
+            currentEditingAttendance = null;
+            selectedLocationForSetting = null;
+            
+            // Hide any open modals
+            document.getElementById('editAttendanceModal').classList.add('hidden');
+            document.getElementById('locationSetterModal').classList.add('hidden');
+            
+            // Reset shift management sections
+            document.getElementById('employeeShiftsSection').classList.add('hidden');
+            document.getElementById('addShiftFormSection').classList.add('hidden');
+            document.getElementById('editShiftFormSection').classList.add('hidden');
+        }
+
+        function saveData() {
+            localStorage.setItem('attendanceData', JSON.stringify(attendanceData));
+            localStorage.setItem('employees', JSON.stringify(employees));
+            localStorage.setItem('admins', JSON.stringify(admins));
+            localStorage.setItem('shifts', JSON.stringify(shifts));
+            if (scanningLocation) {
+                localStorage.setItem('scanningLocation', JSON.stringify(scanningLocation));
+            }
+        }
+
+        // Location Management Functions
+        function calculateDistance(lat1, lng1, lat2, lng2) {
+            const R = 6371e3; // Earth's radius in meters
+            const φ1 = lat1 * Math.PI/180;
+            const φ2 = lat2 * Math.PI/180;
+            const Δφ = (lat2-lat1) * Math.PI/180;
+            const Δλ = (lng2-lng1) * Math.PI/180;
+
+            const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                      Math.cos(φ1) * Math.cos(φ2) *
+                      Math.sin(Δλ/2) * Math.sin(Δλ/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+            return R * c; // Distance in meters
+        }
+
+        function updateLocationDisplay() {
+            const locationStatus = document.getElementById('locationStatus');
+            const locationCoords = document.getElementById('locationCoords');
+            
+            if (scanningLocation) {
+                locationStatus.textContent = `📍 ${scanningLocation.address || 'Location Set'}`;
+                locationCoords.textContent = `Coordinates: ${scanningLocation.lat.toFixed(6)}, ${scanningLocation.lng.toFixed(6)}`;
+                locationCoords.classList.remove('hidden');
+            } else {
+                locationStatus.textContent = '📍 No location set yet';
+                locationCoords.classList.add('hidden');
+            }
+        }
+
+        function openLocationSetter() {
+            document.getElementById('locationSetterModal').classList.remove('hidden');
+            selectedLocationForSetting = null;
+            document.getElementById('saveLocationBtn').disabled = true;
+            document.getElementById('addressSearchSection').classList.add('hidden');
+            document.getElementById('mapContainer').classList.add('hidden');
+            document.getElementById('selectedLocationInfo').classList.add('hidden');
+            document.getElementById('locationSetterStatus').classList.add('hidden');
+        }
+
+        function cancelLocationSetter() {
+            document.getElementById('locationSetterModal').classList.add('hidden');
+            selectedLocationForSetting = null;
+        }
+
+        function useCurrentLocationForScanning() {
+            showLocationSetterStatus('Getting your current location...', 'info');
+            
+            if (!navigator.geolocation) {
+                showLocationSetterStatus('Geolocation is not supported by this device.', 'error');
+                return;
+            }
+
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+                    
+                    selectedLocationForSetting = {
+                        lat: lat,
+                        lng: lng,
+                        address: `Current Location (${lat.toFixed(6)}, ${lng.toFixed(6)})`
+                    };
+                    
+                    showSelectedLocation();
+                    showLocationSetterStatus('Current location captured successfully!', 'success');
+                    document.getElementById('saveLocationBtn').disabled = false;
+                },
+                (error) => {
+                    let errorMessage = 'Unable to get your location. ';
+                    switch(error.code) {
+                        case error.PERMISSION_DENIED:
+                            errorMessage += 'Please allow location access.';
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            errorMessage += 'Location information is unavailable.';
+                            break;
+                        case error.TIMEOUT:
+                            errorMessage += 'Location request timed out.';
+                            break;
+                        default:
+                            errorMessage += 'An unknown error occurred.';
+                            break;
+                    }
+                    showLocationSetterStatus(errorMessage, 'error');
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 60000
+                }
+            );
+        }
+
+        function searchLocationForScanning() {
+            document.getElementById('addressSearchSection').classList.remove('hidden');
+            document.getElementById('mapContainer').classList.remove('hidden');
+            showLocationSetterStatus('Enter an address and click Search, then click on the map to set the exact location.', 'info');
+        }
+
+        function searchAddress() {
+            const address = document.getElementById('addressSearchInput').value.trim();
+            
+            if (!address) {
+                showLocationSetterStatus('Please enter an address to search.', 'error');
+                return;
+            }
+            
+            // Simulate address search (in a real implementation, you'd use a geocoding service)
+            showLocationSetterStatus('Address search is simulated. Click on the map below to set the location manually.', 'info');
+            
+            // Show map for manual selection
+            document.getElementById('mapContainer').classList.remove('hidden');
+            
+            // Simulate clicking on map (in real implementation, this would be an interactive map)
+            setTimeout(() => {
+                // Simulate a location selection
+                const simulatedLat = 40.7128 + (Math.random() - 0.5) * 0.01; // Near NYC with some randomness
+                const simulatedLng = -74.0060 + (Math.random() - 0.5) * 0.01;
+                
+                selectedLocationForSetting = {
+                    lat: simulatedLat,
+                    lng: simulatedLng,
+                    address: address
+                };
+                
+                showSelectedLocation();
+                showLocationSetterStatus('Location selected! You can now save this location.', 'success');
+                document.getElementById('saveLocationBtn').disabled = false;
+            }, 1500);
+        }
+
+        function showSelectedLocation() {
+            if (selectedLocationForSetting) {
+                document.getElementById('selectedLocationText').textContent = selectedLocationForSetting.address;
+                document.getElementById('selectedLocationCoords').textContent = 
+                    `Lat: ${selectedLocationForSetting.lat.toFixed(6)}, Lng: ${selectedLocationForSetting.lng.toFixed(6)}`;
+                document.getElementById('selectedLocationInfo').classList.remove('hidden');
+            }
+        }
+
+        function saveSelectedLocation() {
+            if (!selectedLocationForSetting) {
+                showLocationSetterStatus('No location selected.', 'error');
+                return;
+            }
+            
+            scanningLocation = { ...selectedLocationForSetting };
+            saveData();
+            updateLocationDisplay();
+            
+            showSuccess(`Scanning location set to: ${scanningLocation.address}`);
+            cancelLocationSetter();
+        }
+
+        function showLocationSetterStatus(message, type) {
+            const statusDiv = document.getElementById('locationSetterStatus');
+            statusDiv.className = `p-4 rounded-lg ${type === 'success' ? 'bg-green-50 text-green-800' : 
+                                                   type === 'error' ? 'bg-red-50 text-red-800' : 
+                                                   'bg-blue-50 text-blue-800'}`;
+            statusDiv.textContent = message;
+            statusDiv.classList.remove('hidden');
+        }
+
+        function testCurrentLocation() {
+            if (!scanningLocation) {
+                showError('Location test', 'No scanning location has been set yet.');
+                return;
+            }
+            
+            showInfo('Getting fresh location for testing...');
+            
+            if (!navigator.geolocation) {
+                showError('Location test', 'Geolocation is not supported by this device.');
+                return;
+            }
+
+            // Use same fresh location settings as scanning
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const userLat = position.coords.latitude;
+                    const userLng = position.coords.longitude;
+                    const accuracy = position.coords.accuracy;
+                    
+                    console.log(`Test location: ${userLat}, ${userLng} (accuracy: ${accuracy}m)`);
+                    
+                    const distance = calculateDistance(
+                        userLat, userLng,
+                        scanningLocation.lat, scanningLocation.lng
+                    );
+                    
+                    if (distance <= allowedRadius) {
+                        showSuccess(`Location test passed! You are ${Math.round(distance)}m from the scanning location (within ${allowedRadius}m radius). GPS accuracy: ${Math.round(accuracy)}m.`);
+                    } else {
+                        showWarning(`Location test failed. You are ${Math.round(distance)}m from the scanning location (outside ${allowedRadius}m radius). GPS accuracy: ${Math.round(accuracy)}m.`);
+                    }
+                },
+                (error) => {
+                    let errorMessage = 'Unable to get your current location for testing. ';
+                    switch(error.code) {
+                        case error.PERMISSION_DENIED:
+                            errorMessage += 'Please allow location access.';
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            errorMessage += 'Location information is unavailable.';
+                            break;
+                        case error.TIMEOUT:
+                            errorMessage += 'Location request timed out.';
+                            break;
+                        default:
+                            errorMessage += 'An unknown error occurred.';
+                            break;
+                    }
+                    showError('Location test', errorMessage);
+                },
+                {
+                    enableHighAccuracy: true,    // Request most accurate location possible
+                    timeout: 15000,              // Increased timeout for better accuracy
+                    maximumAge: 0                // CRITICAL: Always get fresh GPS reading for testing too
+                }
+            );
+        }
+
+        function clearScanningLocation() {
+            if (confirm('Are you sure you want to clear the scanning location? This will allow employees to scan from anywhere.')) {
+                scanningLocation = null;
+                localStorage.removeItem('scanningLocation');
+                updateLocationDisplay();
+                showSuccess('Scanning location cleared - employees can now scan from anywhere');
+            }
+        }
+
+
+
+
+
+        // Toggle functions for manage users page
+        function toggleEmployeeAction() {
+            const actionSelect = document.getElementById('empActionSelect');
+            const createForm = document.getElementById('createEmployeeForm');
+            const updateForm = document.getElementById('updateEmployeeForm');
+            
+            if (actionSelect.value === 'create') {
+                createForm.classList.remove('hidden');
+                updateForm.classList.add('hidden');
+                clearEmployeeForms();
+            } else {
+                createForm.classList.add('hidden');
+                updateForm.classList.remove('hidden');
+                clearEmployeeForms();
+            }
+        }
+
+        function toggleAdminAction() {
+            const actionSelect = document.getElementById('adminActionSelect');
+            const createForm = document.getElementById('createAdminForm');
+            const updateForm = document.getElementById('updateAdminForm');
+            
+            if (actionSelect.value === 'create') {
+                createForm.classList.remove('hidden');
+                updateForm.classList.add('hidden');
+                clearAdminForms();
+            } else {
+                createForm.classList.add('hidden');
+                updateForm.classList.remove('hidden');
+                clearAdminForms();
+            }
+        }
+
+        function clearEmployeeForms() {
+            // Clear create form
+            document.getElementById('createEmpUsername').value = '';
+            document.getElementById('createEmpPassword').value = '';
+            document.getElementById('createEmpConfirmPassword').value = '';
+            
+            // Clear update form
+            document.getElementById('manageEmpSelect').value = '';
+            document.getElementById('manageEmpUsername').value = '';
+            document.getElementById('manageEmpPassword').value = '';
+        }
+
+        function clearAdminForms() {
+            // Clear create form
+            document.getElementById('createAdminUsername').value = '';
+            document.getElementById('createAdminPassword').value = '';
+            document.getElementById('createAdminConfirmPassword').value = '';
+            
+            // Clear update form
+            document.getElementById('manageAdminSelect').value = '';
+            document.getElementById('manageAdminUsername').value = '';
+            document.getElementById('manageAdminPassword').value = '';
+        }
+
+        function createEmployeeFromManage() {
+            const username = document.getElementById('createEmpUsername').value;
+            const password = document.getElementById('createEmpPassword').value;
+            const confirmPassword = document.getElementById('createEmpConfirmPassword').value;
+            
+            if (!username || !password || !confirmPassword) {
+                showError('Employee creation', 'Please fill in all fields.');
+                return;
+            }
+            
+            if (password !== confirmPassword) {
+                showError('Employee creation', 'Passwords do not match.');
+                return;
+            }
+            
+            if (employees.find(emp => emp.username === username) || admins.find(admin => admin.username === username)) {
+                showError('Employee creation', 'Username already exists.');
+                return;
+            }
+            
+            const newEmployee = {
+                id: 'emp_' + Date.now(),
+                username: username,
+                password: password
+            };
+            
+            employees.push(newEmployee);
+            saveData();
+            populateEmployeeSelects();
+            populateManualEntryEmployeeSelect();
+            
+            // Clear form
+            document.getElementById('createEmpUsername').value = '';
+            document.getElementById('createEmpPassword').value = '';
+            document.getElementById('createEmpConfirmPassword').value = '';
+            
+            showSuccess(`Employee '${username}' created`);
+        }
+
+        function createAdminFromManage() {
+            const username = document.getElementById('createAdminUsername').value;
+            const password = document.getElementById('createAdminPassword').value;
+            const confirmPassword = document.getElementById('createAdminConfirmPassword').value;
+            
+            if (!username || !password || !confirmPassword) {
+                showError('Admin creation', 'Please fill in all fields.');
+                return;
+            }
+            
+            if (password !== confirmPassword) {
+                showError('Admin creation', 'Passwords do not match.');
+                return;
+            }
+            
+            if (employees.find(emp => emp.username === username) || admins.find(admin => admin.username === username)) {
+                showError('Admin creation', 'Username already exists.');
+                return;
+            }
+            
+            const newAdmin = {
+                id: 'admin_' + Date.now(),
+                username: username,
+                password: password
+            };
+            
+            admins.push(newAdmin);
+            saveData();
+            populateEmployeeSelects();
+            
+            // Clear form
+            document.getElementById('createAdminUsername').value = '';
+            document.getElementById('createAdminPassword').value = '';
+            document.getElementById('createAdminConfirmPassword').value = '';
+            
+            showSuccess(`Admin '${username}' created`);
+        }
+
+
+
+        // Automatic Absent Status Generation System
+        let absentCheckInterval = null;
+        
+        function initializeAbsentStatusGeneration() {
+            console.log('🔄 Initializing automatic absent status generation...');
+            
+            // Run initial check for any missing absent records from previous days
+            runAbsentStatusCheck();
+            
+            // Set up daily check at midnight
+            scheduleNextAbsentCheck();
+            
+            // Also run check every hour during business hours to catch same-day absences
+            absentCheckInterval = setInterval(() => {
+                runAbsentStatusCheck();
+            }, 60 * 60 * 1000); // Every hour
+            
+            console.log('✅ Automatic absent status generation initialized');
+        }
+        
+        function scheduleNextAbsentCheck() {
+            const now = new Date();
+            const tomorrow = new Date(now);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            tomorrow.setHours(0, 1, 0, 0); // 12:01 AM tomorrow
+            
+            const msUntilMidnight = tomorrow.getTime() - now.getTime();
+            
+            setTimeout(() => {
+                runAbsentStatusCheck();
+                // Schedule the next check for the following day
+                scheduleNextAbsentCheck();
+            }, msUntilMidnight);
+            
+            console.log(`⏰ Next absent status check scheduled for: ${tomorrow.toLocaleString()}`);
+        }
+        
+        function runAbsentStatusCheck() {
+            console.log('🔍 Running absent status check...');
+            
+            const today = new Date();
+            const daysToCheck = [];
+            
+            // Check today and the last 7 days to catch any missed absences
+            for (let i = 0; i <= 7; i++) {
+                const checkDate = new Date(today);
+                checkDate.setDate(checkDate.getDate() - i);
+                daysToCheck.push(checkDate.toISOString().split('T')[0]);
+            }
+            
+            let totalAbsentRecordsCreated = 0;
+            
+            daysToCheck.forEach(dateStr => {
+                const absentCount = generateAbsentRecordsForDate(dateStr);
+                totalAbsentRecordsCreated += absentCount;
+            });
+            
+            if (totalAbsentRecordsCreated > 0) {
+                console.log(`📝 Created ${totalAbsentRecordsCreated} absent records`);
+                saveData();
+                
+                // Refresh admin dashboard if currently viewing
+                if (isAdmin && !document.getElementById('adminDashboard').classList.contains('hidden')) {
+                    currentFilteredData = [...attendanceData];
+                    loadAttendanceTable(currentFilteredData);
+                }
+                
+                // Update employee dashboard if currently viewing
+                if (!isAdmin && !document.getElementById('employeeDashboard').classList.contains('hidden')) {
+                    updateMonthlyStatus();
+                }
+            }
+            
+            console.log(`✅ Absent status check completed for ${daysToCheck.length} days`);
+        }
+        
+        function generateAbsentRecordsForDate(dateStr) {
+            const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            const checkDate = new Date(dateStr);
+            const dayName = dayNames[checkDate.getDay()];
+            
+            console.log(`📅 Checking absences for ${dateStr} (${dayName})`);
+            
+            let absentRecordsCreated = 0;
+            
+            // Check each employee who has shifts
+            Object.keys(shifts).forEach(employeeUsername => {
+                const employeeShifts = shifts[employeeUsername] || [];
+                
+                // Find shifts for this day of the week
+                const dayShifts = employeeShifts.filter(shift => {
+                    return typeof shift.workingDays === 'string' && shift.workingDays.includes(dayName);
+                });
+                
+                if (dayShifts.length === 0) {
+                    // No shifts assigned for this day - skip
+                    return;
+                }
+                
+                // Check if employee has ANY attendance record for this date
+                const existingRecords = attendanceData.filter(record => 
+                    record.employee === employeeUsername && record.date === dateStr
+                );
+                
+                if (existingRecords.length > 0) {
+                    // Employee has some attendance record(s) for this date - not absent
+                    return;
+                }
+                
+                // Employee was supposed to work but has no attendance records - mark as absent
+                console.log(`❌ ${employeeUsername} was absent on ${dateStr} - had ${dayShifts.length} shift(s) but no scans`);
+                
+                // Create absent record for the first shift of the day (or combine all shifts)
+                const primaryShift = dayShifts.sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))[0];
+                
+                const absentRecord = {
+                    id: 'att_absent_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+                    employee: employeeUsername,
+                    date: dateStr,
+                    shift: dayShifts.length === 1 ? primaryShift.name : `${dayShifts.length} shifts`,
+                    scanIn: null,
+                    scanOut: null,
+                    status: 'Absent',
+                    note: 'No scan recorded - automatically marked absent'
+                };
+                
+                attendanceData.push(absentRecord);
+                absentRecordsCreated++;
+                
+                console.log(`📝 Created absent record for ${employeeUsername} on ${dateStr}`);
+            });
+            
+            return absentRecordsCreated;
+        }
+        
+        // Manual function for admin to trigger absent status check
+        function manualAbsentStatusCheck() {
+            requireAdminAccess(() => {
+                showInfo('Running manual absent status check...');
+                
+                setTimeout(() => {
+                    runAbsentStatusCheck();
+                    showSuccess('Absent status check completed - any missing absent records have been added');
+                }, 500);
+            });
+        }
+
+        // Initialize app when page loads
+        document.addEventListener('DOMContentLoaded', initApp);
+    </script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'984f363f557c8321',t:'MTc1ODg1MjQ5MC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
