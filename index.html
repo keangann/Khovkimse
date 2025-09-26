@@ -7,6 +7,13 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script type="module">
+        import { syncLoadData, syncSaveData } from './firebase-sync.js';
+        // ...existing code...
+        // Replace direct calls to syncLoadData and syncSaveData with these imports
+        window.syncLoadData = syncLoadData;
+        window.syncSaveData = syncSaveData;
+    </script>
     <style>
         .fade-in { animation: fadeIn 0.3s ease-in; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -1230,39 +1237,37 @@
 
         // Load data from localStorage
         function loadStoredData() {
-            const storedAttendance = localStorage.getItem('attendanceData');
-            if (storedAttendance) {
-                attendanceData = JSON.parse(storedAttendance);
-                // Clean old attendance data (older than 2 years for admin, monthly for employees)
-                cleanOldData();
-            }
-
-            const storedEmployees = localStorage.getItem('employees');
-            if (storedEmployees) {
-                employees = JSON.parse(storedEmployees);
-            }
-
-            const storedAdmins = localStorage.getItem('admins');
-            if (storedAdmins) {
-                admins = JSON.parse(storedAdmins);
-            }
-
-            const storedShifts = localStorage.getItem('shifts');
-            if (storedShifts) {
-                shifts = JSON.parse(storedShifts);
-            }
-
-            const storedQRText = localStorage.getItem('qrCodeRequiredText');
-            if (storedQRText) {
-                qrCodeRequiredText = storedQRText;
-                document.getElementById('qrCodeText').value = qrCodeRequiredText;
-            }
-
-            const storedScanningLocation = localStorage.getItem('scanningLocation');
-            if (storedScanningLocation) {
-                scanningLocation = JSON.parse(storedScanningLocation);
-                updateLocationDisplay();
-            }
+            // Try to sync from cloud, fallback to localStorage
+            syncLoadData(function() {
+                // Fallback to localStorage if any data missing
+                const storedAttendance = localStorage.getItem('attendanceData');
+                if (storedAttendance) {
+                    attendanceData = JSON.parse(storedAttendance);
+                    cleanOldData();
+                }
+                const storedEmployees = localStorage.getItem('employees');
+                if (storedEmployees) {
+                    employees = JSON.parse(storedEmployees);
+                }
+                const storedAdmins = localStorage.getItem('admins');
+                if (storedAdmins) {
+                    admins = JSON.parse(storedAdmins);
+                }
+                const storedShifts = localStorage.getItem('shifts');
+                if (storedShifts) {
+                    shifts = JSON.parse(storedShifts);
+                }
+                const storedQRText = localStorage.getItem('qrCodeRequiredText');
+                if (storedQRText) {
+                    qrCodeRequiredText = storedQRText;
+                    document.getElementById('qrCodeText').value = qrCodeRequiredText;
+                }
+                const storedScanningLocation = localStorage.getItem('scanningLocation');
+                if (storedScanningLocation) {
+                    scanningLocation = JSON.parse(storedScanningLocation);
+                    updateLocationDisplay();
+                }
+            });
         }
 
         // Setup default accounts
@@ -3167,6 +3172,7 @@
         }
 
         function saveData() {
+            // Save to localStorage as usual
             localStorage.setItem('attendanceData', JSON.stringify(attendanceData));
             localStorage.setItem('employees', JSON.stringify(employees));
             localStorage.setItem('admins', JSON.stringify(admins));
@@ -3174,6 +3180,8 @@
             if (scanningLocation) {
                 localStorage.setItem('scanningLocation', JSON.stringify(scanningLocation));
             }
+            // Also sync to cloud
+            syncSaveData();
         }
 
         // Location Management Functions
